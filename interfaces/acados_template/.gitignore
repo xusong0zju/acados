@@ -1,0 +1,6 @@
+c_generated_code
+__pycache__
+acados_ocp.json
+tera_renderer/t_renderer/target
+*.egg-info
+*.lock
