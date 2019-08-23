@@ -138,6 +138,8 @@ current_dir := $(patsubst %/,%,$(dir $(mkfile_path)))
 # Do not complain if Makefile.local does not exisist
 -include $(current_dir)/Makefile.local
 
+-include $(current_dir)/Makefile.teensy
+
 # optimization flags
 CFLAGS += -O2 -fPIC
 
