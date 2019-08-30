@@ -9,6 +9,7 @@
 *.out
 *.a
 *.mex*
+*.d
 
 # Packages #
 ############
