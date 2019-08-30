@@ -2,10 +2,16 @@
 TARGET = $(notdir $(CURDIR))
 
 # The teensy version to use, 30, 31, 35, 36, or LC
-TEENSY = 30
+TEENSY = 40
 
 # Set to 24000000, 48000000, or 96000000 to set CPU core speed
-TEENSY_CORE_SPEED = 48000000
+# TEENSY_CORE_SPEED = 48000000
+TEENSY_CORE_SPEED = 600000000
+
+# BLASFEO_TARGET = ARMV7EM_ARM_CORTEX_M7
+BLASFEO_TARGET = GENERIC
+HPIPM_TARGET = GENERIC
+
 
 # Some libraries will require this to be defined
 # If you define this, you will break the default main.cpp
@@ -15,7 +21,7 @@ TEENSY_CORE_SPEED = 48000000
 OPTIONS = -DUSB_SERIAL -DLAYOUT_US_ENGLISH
 
 # directory to build in
-BUILDDIR = $(abspath $(CURDIR)/build)
+BUILDDIR = $(abspath $(CURDIR)/build_teensy)
 
 #************************************************************************
 # Location of Teensyduino utilities, Toolchain, and Arduino Libraries.
@@ -23,8 +29,10 @@ BUILDDIR = $(abspath $(CURDIR)/build)
 # locations and edit the pathnames.  The rest of Arduino is not needed.
 #************************************************************************
 
+TEMPLATES_PATH = /home/tom/workspaces/teensy/teensy-template/
+
 # path location for Teensy Loader, teensy_post_compile and teensy_reboot
-TOOLSPATH = $(CURDIR)/tools
+TOOLSPATH = $(TEMPLATES_PATH)/tools
 
 ifeq ($(OS),Windows_NT)
     $(error What is Win Dose?)
@@ -35,8 +43,12 @@ else
     endif
 endif
 
-# path location for Teensy 3 core
-COREPATH = teensy3
+# path location for Teensy
+ifeq ($(TEENSY), 40)
+	COREPATH = teensy4
+else
+	COREPATH = teensy3
+endif
 
 # path location for Arduino libraries
 LIBRARYPATH = libraries
@@ -86,6 +98,11 @@ else ifeq ($(TEENSY), 36)
     CPPFLAGS += -D__MK66FX1M0__ -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16
     LDSCRIPT = $(COREPATH)/mk66fx1m0.ld
     LDFLAGS += -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -T$(LDSCRIPT)
+    LIBS += -larm_cortexM4lf_math
+else ifeq ($(TEENSY), 40)
+    CPPFLAGS += -D__IMXRT1062__ -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16
+    LDSCRIPT = $(COREPATH)/imxrt1062.ld
+    LDFLAGS += -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16 -T$(LDSCRIPT)
     LIBS += -larm_cortexM4lf_math
 else
     $(error Invalid setting for TEENSY)
