@@ -29,7 +29,7 @@ BUILDDIR = $(abspath $(CURDIR)/build_teensy)
 # locations and edit the pathnames.  The rest of Arduino is not needed.
 #************************************************************************
 
-TEMPLATES_PATH = /home/tom/workspaces/teensy/teensy-template/
+# TEMPLATES_PATH = <path-to-teensy-acados-template-repo>
 
 # path location for Teensy Loader, teensy_post_compile and teensy_reboot
 TOOLSPATH = $(TEMPLATES_PATH)/tools
