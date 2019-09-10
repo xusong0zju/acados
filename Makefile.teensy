@@ -4,8 +4,8 @@ TARGET = $(notdir $(CURDIR))
 # The teensy version to use, 30, 31, 35, 36, or LC
 TEENSY = 40
 
-# Set to 24000000, 48000000, or 96000000 to set CPU core speed
-# TEENSY_CORE_SPEED = 48000000
+# Set to 24 000 000, 48 000 000, or 96 000 000 to set CPU core speed
+# TEENSY_CORE_SPEED = 48 000 000
 TEENSY_CORE_SPEED = 600000000
 
 # BLASFEO_TARGET = ARMV7EM_ARM_CORTEX_M7
@@ -121,63 +121,3 @@ CXX = $(abspath $(COMPILERPATH))/arm-none-eabi-g++
 OBJCOPY = $(abspath $(COMPILERPATH))/arm-none-eabi-objcopy
 SIZE = $(abspath $(COMPILERPATH))/arm-none-eabi-size
 
-# automatically create lists of the sources and objects
-LC_FILES := $(wildcard $(LIBRARYPATH)/*/*.c)
-LCPP_FILES := $(wildcard $(LIBRARYPATH)/*/*.cpp)
-TC_FILES := $(wildcard $(COREPATH)/*.c)
-TCPP_FILES := $(wildcard $(COREPATH)/*.cpp)
-C_FILES := $(wildcard src/*.c)
-CPP_FILES := $(wildcard src/*.cpp)
-INO_FILES := $(wildcard src/*.ino)
-
-# include paths for libraries
-L_INC := $(foreach lib,$(filter %/, $(wildcard $(LIBRARYPATH)/*/)), -I$(lib))
-
-SOURCES := $(C_FILES:.c=.o) $(CPP_FILES:.cpp=.o) $(INO_FILES:.ino=.o) $(TC_FILES:.c=.o) $(TCPP_FILES:.cpp=.o) $(LC_FILES:.c=.o) $(LCPP_FILES:.cpp=.o)
-OBJS := $(foreach src,$(SOURCES), $(BUILDDIR)/$(src))
-
-all: hex
-
-build: $(TARGET).elf
-
-hex: $(TARGET).hex
-
-post_compile: $(TARGET).hex
-	@$(abspath $(TOOLSPATH))/teensy_post_compile -file="$(basename $<)" -path=$(CURDIR) -tools="$(abspath $(TOOLSPATH))"
-
-reboot:
-	@-$(abspath $(TOOLSPATH))/teensy_reboot
-
-upload: post_compile reboot
-
-$(BUILDDIR)/%.o: %.c
-	@echo -e "[CC]\t$<"
-	@mkdir -p "$(dir $@)"
-	@$(CC) $(CPPFLAGS) $(CFLAGS) $(L_INC) -o "$@" -c "$<"
-
-$(BUILDDIR)/%.o: %.cpp
-	@echo -e "[CXX]\t$<"
-	@mkdir -p "$(dir $@)"
-	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(L_INC) -o "$@" -c "$<"
-
-$(BUILDDIR)/%.o: %.ino
-	@echo -e "[CXX]\t$<"
-	@mkdir -p "$(dir $@)"
-	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(L_INC) -o "$@" -x c++ -include Arduino.h -c "$<"
-
-$(TARGET).elf: $(OBJS) $(LDSCRIPT)
-	@echo -e "[LD]\t$@"
-	@$(CC) $(LDFLAGS) -o "$@" $(OBJS) $(LIBS)
-
-%.hex: %.elf
-	@echo -e "[HEX]\t$@"
-	@$(SIZE) "$<"
-	@$(OBJCOPY) -O ihex -R .eeprom "$<" "$@"
-
-# compiler generated dependency info
--include $(OBJS:.o=.d)
-
-clean:
-	@echo Cleaning...
-	@rm -rf "$(BUILDDIR)"
-	@rm -f "$(TARGET).elf" "$(TARGET).hex"
