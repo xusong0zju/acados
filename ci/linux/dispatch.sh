@@ -100,5 +100,10 @@ elif [ "${SECTION}" = 'after_success' ]; then
     # source "${SHARED_SCRIPT_DIR}/after_success_package_release.sh";
     source "${SHARED_SCRIPT_DIR}/upload_coverage.sh";
 
+    if [[ "${DEPLOY_NAME}" = 'linux python gcc6' ]];
+    then
+        source "${SCRIPT_DIR}/deploy_docs.sh";
+    fi
+
 fi
 
