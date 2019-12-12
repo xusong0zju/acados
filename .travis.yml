@@ -12,6 +12,7 @@ env:
     - ACADOS_OCTAVE="OFF"
     - ACADOS_PYTHON="OFF"
     - ACADOS_ON_TRAVIS="ON"
+    - ACADOS_DOCS="OFF"
 
 os: linux
 sudo: required
@@ -51,6 +52,7 @@ matrix:
         - DEPLOY_NAME="linux python gcc6"
         - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
         - ACADOS_PYTHON="ON"
+        - ACADOS_DOCS="ON"
         - ACADOS_EXAMPLES="OFF"
         - ACADOS_UNIT_TESTS="OFF"
 

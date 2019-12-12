@@ -39,6 +39,13 @@ if [ "${SECTION}" = 'before_install' ]; then
     export ACADOS_INSTALL_DIR="$(pwd)";
     export ACADOS_SOURCE_DIR="$(pwd)";
 
+    if [[ "${ACADOS_DOCS}" = 'ON' ]];
+    then
+        echo "uploading docs"
+        source "${SCRIPT_DIR}/deploy_docs.sh";
+        echo "docs uploaded"
+    fi
+
 elif [ "${SECTION}" = 'install' ]; then
     source "${SCRIPT_DIR}/install_apt_dependencies.sh";
     source "${SHARED_SCRIPT_DIR}/install_eigen.sh";
@@ -100,10 +107,6 @@ elif [ "${SECTION}" = 'after_success' ]; then
     # source "${SHARED_SCRIPT_DIR}/after_success_package_release.sh";
     source "${SHARED_SCRIPT_DIR}/upload_coverage.sh";
 
-    if [[ "${DEPLOY_NAME}" = 'linux python gcc6' ]];
-    then
-        source "${SCRIPT_DIR}/deploy_docs.sh";
-    fi
 
 fi
 
