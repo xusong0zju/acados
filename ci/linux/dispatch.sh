@@ -38,13 +38,6 @@ if [ "${SECTION}" = 'before_install' ]; then
     export ACADOS_INSTALL_DIR="$(pwd)";
     export ACADOS_SOURCE_DIR="$(pwd)";
 
-    echo "ACADOS_DOCS = ${ACADOS_DOCS}"
-    if [[ "${ACADOS_DOCS}" = 'ON' ]];
-    then
-        source "${SCRIPT_DIR}/deploy_docs.sh";
-        echo "docs uploaded"
-    fi
-
 elif [ "${SECTION}" = 'install' ]; then
     source "${SCRIPT_DIR}/install_apt_dependencies.sh";
     source "${SHARED_SCRIPT_DIR}/install_eigen.sh";
@@ -97,6 +90,13 @@ elif [ "${SECTION}" = 'install' ]; then
        [[ "${DEV_MATLAB}" = 'ON' || "${ACADOS_MATLAB}" = 'ON' ]];
     then
         source "${SHARED_SCRIPT_DIR}/install_matlab.sh";
+    fi
+
+    echo "ACADOS_DOCS = ${ACADOS_DOCS}"
+    if [[ "${ACADOS_DOCS}" = 'ON' ]];
+    then
+        source "${SCRIPT_DIR}/deploy_docs.sh";
+        echo "docs uploaded"
     fi
 
 elif [ "${SECTION}" = 'script' ]; then
