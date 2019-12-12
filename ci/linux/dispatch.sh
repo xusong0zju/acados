@@ -32,16 +32,15 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
-echo "SECTION ="
-echo ${SECTION}
+echo "SECTION = ${SECTION}"
 
 if [ "${SECTION}" = 'before_install' ]; then
     export ACADOS_INSTALL_DIR="$(pwd)";
     export ACADOS_SOURCE_DIR="$(pwd)";
 
+    echo "ACADOS_DOCS = ${ACADOS_DOCS}"
     if [[ "${ACADOS_DOCS}" = 'ON' ]];
     then
-        echo "uploading docs"
         source "${SCRIPT_DIR}/deploy_docs.sh";
         echo "docs uploaded"
     fi
