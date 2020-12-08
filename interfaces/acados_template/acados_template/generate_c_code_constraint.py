@@ -31,50 +31,147 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
-
-from casadi import *
 import os
+from casadi import *
+from .utils import ALLOWED_CASADI_VERSIONS, is_empty, casadi_length, casadi_version_warning
 
-def generate_c_code_constraint( constraint, suffix_name ):
+def generate_c_code_constraint( model, con_name, is_terminal, opts ):
 
     casadi_version = CasadiMeta.version()
     casadi_opts = dict(mex=False, casadi_int='int', casadi_real='double')
 
-    if  casadi_version not in ('3.4.5', '3.4.0'):
-        # old casadi versions
-        raise Exception('Please download and install Casadi 3.4.0 to ensure compatibility with acados. Version ' + casadi_version + ' currently in use.')
+    if casadi_version not in (ALLOWED_CASADI_VERSIONS):
+        casadi_version_warning(casadi_version)
 
     # load constraint variables and expression
-    x = constraint.x
-    u = constraint.u
-    # nc = nh or np 
-    nc = constraint.nc 
-    con_exp = constraint.expr
-    con_name = constraint.name
+    x = model.x
+    p = model.p
 
-    # get dimensions
-    nx = x.size()[0]
-    nu = u.size()[0]
+    if isinstance(x, casadi.MX):
+        symbol = MX.sym
+    else:
+        symbol = SX.sym
 
-    # set up functions to be exported
-    fun_name = con_name + suffix_name
-    # TODO(andrea): first output seems to be ignored in the C code
-    jac_x = jacobian(con_exp, x);
-    jac_u = jacobian(con_exp, u);
-    constraint_fun_jac_tran = Function(fun_name, [x, u], [con_exp, vertcat(transpose(jac_u), transpose(jac_x))])
+    if is_terminal:
+        con_h_expr = model.con_h_expr_e
+        con_phi_expr = model.con_phi_expr_e
+        # create dummy u, z
+        u = symbol('u', 0, 0)
+        z = symbol('z', 0, 0)
+    else:
+        con_h_expr = model.con_h_expr
+        con_phi_expr = model.con_phi_expr
+        u = model.u
+        z = model.z
 
-    # generate C code
-    if not os.path.exists('c_generated_code'):
-        os.mkdir('c_generated_code')
+    if (not is_empty(con_h_expr)) and (not is_empty(con_phi_expr)):
+        raise Exception("acados: you can either have constraint_h, or constraint_phi, not both.")
 
-    os.chdir('c_generated_code')
-    gen_dir = con_name + suffix_name 
-    if not os.path.exists(gen_dir):
-        os.mkdir(gen_dir)
-    gen_dir_location = './' + gen_dir
-    os.chdir(gen_dir_location)
-    file_name = con_name + suffix_name
-    constraint_fun_jac_tran.generate(file_name, casadi_opts)
-    os.chdir('../..')
+    if not (is_empty(con_h_expr) and is_empty(con_phi_expr)):
+        if is_empty(con_h_expr):
+            constr_type = 'BGP'
+        else:
+            constr_type = 'BGH'
+
+        if is_empty(p):
+            p = symbol('p', 0, 0)
+
+        if is_empty(z):
+            z = symbol('z', 0, 0)
+
+        if not (is_empty(con_h_expr)) and opts['generate_hess']:
+            # multipliers for hessian
+            nh = casadi_length(con_h_expr)
+            lam_h = symbol('lam_h', nh, 1)
+
+        # set up & change directory
+        if not os.path.exists('c_generated_code'):
+            os.mkdir('c_generated_code')
+        os.chdir('c_generated_code')
+        gen_dir = con_name + '_constraints'
+        if not os.path.exists(gen_dir):
+            os.mkdir(gen_dir)
+        gen_dir_location = './' + gen_dir
+        os.chdir(gen_dir_location)
+
+        # export casadi functions
+        if constr_type == 'BGH':
+            if is_terminal:
+                fun_name = con_name + '_constr_h_e_fun_jac_uxt_zt'
+            else:
+                fun_name = con_name + '_constr_h_fun_jac_uxt_zt'
+
+            jac_ux_t = transpose(jacobian(con_h_expr, vertcat(u,x)))
+            jac_z_t = jacobian(con_h_expr, z)
+            constraint_fun_jac_tran = Function(fun_name, [x, u, z, p], \
+                    [con_h_expr, jac_ux_t, jac_z_t])
+
+            constraint_fun_jac_tran.generate(fun_name, casadi_opts)
+            if opts['generate_hess']:
+
+                if is_terminal:
+                    fun_name = con_name + '_constr_h_e_fun_jac_uxt_hess'
+                else:
+                    fun_name = con_name + '_constr_h_fun_jac_uxt_hess'
+
+                # adjoint
+                adj_ux = jtimes(con_h_expr, vertcat(u, x), lam_h, True)
+                # hessian
+                hess_ux = jacobian(adj_ux, vertcat(u, x))
+
+                adj_z = jtimes(con_h_expr, z, lam_h, True)
+                hess_z = jacobian(adj_z, z)
+
+                # set up functions
+                constraint_fun_jac_tran_hess = \
+                    Function(fun_name, [x, u, lam_h, z, p], \
+                      [con_h_expr, jac_ux_t, hess_ux, jac_z_t, hess_z])
+
+                # generate C code
+                constraint_fun_jac_tran_hess.generate(fun_name, casadi_opts)
+
+            if is_terminal:
+                fun_name = con_name + '_constr_h_e_fun'
+            else:
+                fun_name = con_name + '_constr_h_fun'
+            h_fun = Function(fun_name, [x, u, z, p], [con_h_expr])
+            h_fun.generate(fun_name, casadi_opts)
+
+        else: # BGP constraint
+            if is_terminal:
+                fun_name = con_name + '_phi_e_constraint'
+                r = model.con_r_in_phi_e
+                con_r_expr = model.con_r_expr_e
+            else:
+                fun_name = con_name + '_phi_constraint'
+                r = model.con_r_in_phi
+                con_r_expr = model.con_r_expr
+
+            nphi = casadi_length(con_phi_expr)
+            con_phi_expr_x_u_z = substitute(con_phi_expr, r, con_r_expr)
+            phi_jac_u = jacobian(con_phi_expr_x_u_z, u)
+            phi_jac_x = jacobian(con_phi_expr_x_u_z, x)
+            phi_jac_z = jacobian(con_phi_expr_x_u_z, z)
+
+            hess = hessian(con_phi_expr[0], r)[0]
+            for i in range(1, nphi):
+                hess = vertcat(hess, hessian(con_phi_expr[i], r)[0])
+
+            r_jac_u = jacobian(con_r_expr, u)
+            r_jac_x = jacobian(con_r_expr, x)
+
+            constraint_phi = \
+                Function(fun_name, [x, u, z, p], \
+                    [con_phi_expr_x_u_z, \
+                    vertcat(transpose(phi_jac_u), \
+                    transpose(phi_jac_x)), \
+                    transpose(phi_jac_z), \
+                    hess, vertcat(transpose(r_jac_u), \
+                    transpose(r_jac_x))])
+
+            constraint_phi.generate(fun_name, casadi_opts)
+
+        # change directory back
+        os.chdir('../..')
 
     return

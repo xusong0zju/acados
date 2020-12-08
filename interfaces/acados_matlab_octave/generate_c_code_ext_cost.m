@@ -32,72 +32,91 @@
 %
 
 
-function generate_c_code_ext_cost( model, opts )
+function generate_c_code_ext_cost( model, opts, target_dir )
 
 %% import casadi
 import casadi.*
 
 casadi_version = CasadiMeta.version();
-if strcmp(casadi_version(1:3),'3.4') % require casadi 3.4.x
-	casadi_opts = struct('mex', false, 'casadi_int', 'int', 'casadi_real', 'double');
+if ( strcmp(casadi_version(1:3),'3.4') || strcmp(casadi_version(1:3),'3.5')) % require casadi 3.4.x
+    casadi_opts = struct('mex', false, 'casadi_int', 'int', 'casadi_real', 'double');
 else % old casadi versions
-	error('Please download and install CasADi version 3.4.x to ensure compatibility with acados')
+    error('Please provide CasADi version 3.4 or 3.5 to ensure compatibility with acados')
+end
+
+% cd to target folder
+if nargin > 2
+    original_dir = pwd;
+    if ~exist(target_dir, 'dir')
+        mkdir(target_dir);
+    end
+    chdir(target_dir)
 end
 
 %% load model
 % x
 x = model.sym_x;
-nx = length(x);
 % check type
-if class(x(1)) == 'casadi.SX'
+if isa(x(1), 'casadi.SX')
     isSX = true;
 else
     isSX = false;
 end
 % u
 u = model.sym_u;
-nu = length(u);
 % p
 if isfield(model, 'sym_p')
     p = model.sym_p;
-	np = length(p);
 else
     if isSX
         p = SX.sym('p',0, 0);
     else
         p = MX.sym('p',0, 0);
     end
-	np = 0;
 end
 
 model_name = model.name;
 
-if isfield(model, 'cost_expr_ext_cost')
-	ext_cost = model.cost_expr_ext_cost;
-	% generate jacobians
-	jac_x = jacobian(ext_cost, x);
-	jac_u = jacobian(ext_cost, u);
-	% generate hessians
-	hes_uu = jacobian(jac_u', u);
-	hes_xu = jacobian(jac_u', x);
-	hes_ux = jacobian(jac_x', u);
-	hes_xx = jacobian(jac_x', x);
-	% Set up functions
-	ext_cost_jac_hes = Function([model_name,'_cost_ext_cost_jac_hes'], {x, u, p}, {[jac_u'; jac_x'], [hes_uu, hes_xu; hes_ux, hes_xx]});
-	% generate C code
-	ext_cost_jac_hes.generate([model_name,'_cost_ext_cost_jac_hes'], casadi_opts);
+if isfield(model, 'cost_expr_ext_cost') && strcmp(model.ext_fun_type, 'casadi')
+    ext_cost = model.cost_expr_ext_cost;
+    % generate jacobians
+    jac_x = jacobian(ext_cost, x);
+    jac_u = jacobian(ext_cost, u);
+    % generate hessians
+    hes_uu = jacobian(jac_u', u);
+    hes_xu = jacobian(jac_u', x);
+    hes_ux = jacobian(jac_x', u);
+    hes_xx = jacobian(jac_x', x);
+    % Set up functions
+    ext_cost_fun = Function([model_name,'_cost_ext_cost_fun'], {x, u, p}, {ext_cost});
+    ext_cost_fun_jac = Function([model_name,'_cost_ext_cost_fun_jac'], {x, u, p}, {ext_cost, [jac_u'; jac_x']});
+    ext_cost_fun_jac_hess = Function([model_name,'_cost_ext_cost_fun_jac_hess'], {x, u, p},...
+                                 {ext_cost, [jac_u'; jac_x'], [hes_uu, hes_xu; hes_ux, hes_xx]});
+    % generate C code
+    ext_cost_fun.generate([model_name,'_cost_ext_cost_fun'], casadi_opts);
+    ext_cost_fun_jac_hess.generate([model_name,'_cost_ext_cost_fun_jac_hess'], casadi_opts);
+    ext_cost_fun_jac.generate([model_name,'_cost_ext_cost_fun_jac'], casadi_opts);
 end
 
-if isfield(model, 'cost_expr_ext_cost_e')
-	ext_cost_e = model.cost_expr_ext_cost_e;
-	% generate jacobians
-	jac_x_e = jacobian(ext_cost_e, x);
-	% generate hessians
-	hes_xx_e = jacobian(jac_x', x);
-	% Set up functions
-	ext_cost_e_jac_hes = Function([model_name,'_cost_ext_cost_e_jac_hes'], {x, p}, {jac_x_e', hes_xx_e});
-	% generate C code
-	ext_cost_e_jac_hes.generate([model_name,'_cost_ext_cost_e_jac_hes'], casadi_opts);
+if isfield(model, 'cost_expr_ext_cost_e') && strcmp(model.ext_fun_type_e, 'casadi')
+    ext_cost_e = model.cost_expr_ext_cost_e;
+    % generate jacobians
+    jac_x_e = jacobian(ext_cost_e, x);
+    % generate hessians
+    hes_xx_e = jacobian(jac_x_e', x);
+    % Set up functions
+    ext_cost_e_fun = Function([model_name,'_cost_ext_cost_e_fun'], {x, p}, {ext_cost_e});
+    ext_cost_e_fun_jac = Function([model_name,'_cost_ext_cost_e_fun_jac'], {x, p}, {ext_cost_e, jac_x_e'});
+    ext_cost_e_fun_jac_hess = Function([model_name,'_cost_ext_cost_e_fun_jac_hess'], {x, p}, {ext_cost_e, jac_x_e', hes_xx_e});
+    % generate C code
+    ext_cost_e_fun.generate([model_name,'_cost_ext_cost_e_fun'], casadi_opts);
+    ext_cost_e_fun_jac.generate([model_name,'_cost_ext_cost_e_fun_jac'], casadi_opts);
+    ext_cost_e_fun_jac_hess.generate([model_name,'_cost_ext_cost_e_fun_jac_hess'], casadi_opts);
 end
 
+if nargin > 2
+    chdir(original_dir)
+end
+
+end
 

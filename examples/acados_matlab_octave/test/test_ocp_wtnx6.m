@@ -38,7 +38,7 @@ addpath('../wind_turbine_nx6/');
 
 
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 % simulation
 sim_method = 'irk';
@@ -46,7 +46,6 @@ sim_sens_forw = 'false';
 sim_num_stages = 4;
 sim_num_steps = 1;
 % ocp
-ocp_param_scheme = 'multiple_shooting_unif_grid';
 ocp_N = 40;
 ocp_nlp_solver = 'sqp';
 %ocp_nlp_solver = 'sqp_rti';
@@ -93,12 +92,9 @@ ny = 4; % number of outputs in lagrange term
 ny_e = 2; % number of outputs in mayer term
 nbx = 3;
 nbu = nu;
-ng = 0;
-ng_e = 0;
 nh = 1;
 nh_e = 1;
 ns = 2;
-%ns = 1;
 ns_e = 2;
 %ns_e = 1;
 nsbx = 1;
@@ -186,30 +182,11 @@ Jsh(1, 1) = 1.0;
 Jsh_e = zeros(nh_e, nsh_e);
 Jsh_e(1, 1) = 1.0;
 
-% shift
-x_end = zeros(nx, 1);
-u_end = zeros(nu, 1);
-
-
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
-%% dims
 ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-ocp_model.set('dim_ny', ny);
-ocp_model.set('dim_ny_e', ny_e);
-ocp_model.set('dim_nbx', nbx);
-ocp_model.set('dim_nbu', nbu);
-ocp_model.set('dim_nh', nh);
-ocp_model.set('dim_nh_e', nh_e);
-ocp_model.set('dim_ns', ns);
-ocp_model.set('dim_ns_e', ns_e);
-ocp_model.set('dim_nsbx', nsbx);
-ocp_model.set('dim_nsh', nsh);
-ocp_model.set('dim_nsh_e', nsh_e);
-ocp_model.set('dim_np', np);
+
 %% symbolics
 ocp_model.set('sym_x', model.sym_x);
 ocp_model.set('sym_u', model.sym_u);
@@ -245,6 +222,9 @@ end
 ocp_model.set('constr_Jbx', Jbx);
 ocp_model.set('constr_lbx', lbx);
 ocp_model.set('constr_ubx', ubx);
+ocp_model.set('constr_Jbx_e', Jbx);
+ocp_model.set('constr_lbx_e', lbx);
+ocp_model.set('constr_ubx_e', ubx);
 % input bounds
 ocp_model.set('constr_Jbu', Jbu);
 ocp_model.set('constr_lbu', lbu);
@@ -258,8 +238,12 @@ ocp_model.set('constr_lh_e', lh_e);
 ocp_model.set('constr_uh_e', uh_e);
 % soft nonlinear constraints
 ocp_model.set('constr_Jsbx', Jsbx);
+ocp_model.set('constr_Jsbx_e', Jsbx);
 ocp_model.set('constr_Jsh', Jsh);
 ocp_model.set('constr_Jsh_e', Jsh_e);
+
+% initial state dummy
+ocp_model.set('constr_x0', zeros(nx, 1));
 
 ocp_model.model_struct;
 
@@ -267,9 +251,8 @@ ocp_model.model_struct;
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', ocp_param_scheme);
 ocp_opts.set('param_scheme_N', ocp_N);
 ocp_opts.set('nlp_solver', ocp_nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', ocp_nlp_solver_exact_hessian);
@@ -293,6 +276,7 @@ ocp_opts.set('sim_method', ocp_sim_method);
 ocp_opts.set('sim_method_num_stages', ocp_sim_method_num_stages);
 ocp_opts.set('sim_method_num_steps', ocp_sim_method_num_steps);
 ocp_opts.set('sim_method_newton_iter', ocp_sim_method_newton_iter);
+ocp_opts.set('regularize_method', 'no_regularize');
 
 ocp_opts.opts_struct;
 
@@ -309,10 +293,6 @@ ocp = acados_ocp(ocp_model, ocp_opts);
 
 %% acados sim model
 sim_model = acados_sim_model();
-% dims
-sim_model.set('dim_nx', nx);
-sim_model.set('dim_nu', nu);
-sim_model.set('dim_np', np);
 % symbolics
 sim_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -338,13 +318,12 @@ end
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', sim_num_stages);
 sim_opts.set('num_steps', sim_num_steps);
 sim_opts.set('method', sim_method);
 sim_opts.set('sens_forw', sim_sens_forw);
-ocp_opts.set('regularize_method', 'no_regularize');
 
 %sim_opts.opts_struct
 
@@ -461,42 +440,29 @@ for ii=1:n_sim
         error('ocp_nlp solver returned nonzero status!');
     end
 
-    fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms]), Pel = %f\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, electrical_power);
+    fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms]), Pel = %f',...
+            status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, electrical_power);
 
     if 0
-        stat = ocp.get('stat');
-        if (strcmp(ocp_nlp_solver, 'sqp'))
-            fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-            if size(stat,2)>7
-                fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-            end
-            fprintf('\n');
-            for ii=1:size(stat,1)
-                fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3), stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-                if size(stat,2)>7
-                    fprintf('\t%e\t%e\t%e\t%e', stat(ii,8), stat(ii,9), stat(ii,10), stat(ii,11));
-                end
-                fprintf('\n');
-            end
-            fprintf('\n');
-        else % sqp_rti
-            fprintf('\niter\tqp_stat\tqp_iter');
-            if size(stat,2)>3
-                fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-            end
-            fprintf('\n');
-            for ii=1:size(stat,1)
-                fprintf('%d\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3));
-                if size(stat,2)>3
-                    fprintf('\t%e\t%e\t%e\t%e', stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-                end
-                fprintf('\n');
-            end
-            fprintf('\n');
-        end
+        ocp.print('stat')
     end
 
 end
+
+% test setter
+ocp.set('cost_z', ones(2,1), 1)
+ocp.set('cost_Z', ones(2,1), 1)
+ocp.set('cost_zl', ones(2,1), N-1)
+
+% get slack values
+for i = 0:N-1
+    sl = ocp.get('sl', i);
+    su = ocp.get('su', i);
+    t = ocp.get('t', i);
+end
+sl = ocp.get('sl', N);
+su = ocp.get('su', N);
+
 
 electrical_power = 0.944*97/100*x_sim(1,:).*x_sim(6,:);
 
@@ -512,13 +478,13 @@ x_sim_ref = [   1.263425730522397
 err_vs_ref = x_sim_ref - x_sim(:,end);
 
 if status~=0
-    error('\nnTEST_OCP: solution failed!\n\n');
+    error('test_ocp_wtnx6: solution failed!');
 elseif err_vs_ref > 1e-14
-    error('\nnTEST_OCP: to high deviation from known result!\n\n');
+    error('test_ocp_wtnx6: to high deviation from known result!');
 elseif sqp_iter > 2
-    error('\nnTEST_OCP: sqp_iter > 2, this problem is typically solved within less iterations!\n\n');
+    error('test_ocp_wtnx6: sqp_iter > 2, this problem is typically solved within less iterations!');
 else
-    fprintf('\nsuccess!\n');
+    fprintf('\ntest_ocp_wtnx6: success!\n');
 end
 
 % figures
@@ -556,11 +522,3 @@ if 0
         waitforbuttonpress;
     end
 end
-
-
-
-
-
-
-return;
-

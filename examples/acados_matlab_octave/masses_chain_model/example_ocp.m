@@ -35,23 +35,19 @@
 clear all
 
 
-
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 
-
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 gnsf_detect_struct = 'true';
+model_name = 'masses_chain';
 
-param_scheme = 'multiple_shooting_unif_grid';
 N = 40;
 nlp_solver = 'sqp';
 %nlp_solver = 'sqp_rti';
@@ -64,18 +60,22 @@ regularize_method = 'no_regularize';
 %regularize_method = 'convexify';
 nlp_solver_max_iter = 100;
 nlp_solver_ext_qp_res = 1;
+nlp_solver_warm_start_first_qp = 0;
 qp_solver = 'partial_condensing_hpipm';
 %qp_solver = 'full_condensing_hpipm';
+%qp_solver = 'full_condensing_qpoases';
+%qp_solver = 'partial_condensing_osqp';
 qp_solver_cond_N = 5;
 qp_solver_cond_ric_alg = 0;
 qp_solver_ric_alg = 0;
 qp_solver_warm_start = 0;
+qp_solver_max_iter = 100;
 %dyn_type = 'explicit';
 dyn_type = 'implicit';
 %dyn_type = 'discrete';
 %sim_method = 'erk';
-%sim_method = 'irk';
-sim_method = 'irk_gnsf';
+sim_method = 'irk';
+%sim_method = 'irk_gnsf';
 sim_method_num_stages = 4;
 sim_method_num_steps = 2;
 cost_type = 'linear_ls';
@@ -87,7 +87,6 @@ nfm = 4;    % number of free masses
 nm = nfm+1; % number of masses
 model = masses_chain_model(nfm);
 wall = -0.01;
-
 
 
 % dims
@@ -119,30 +118,15 @@ Jbx = zeros(nbx, nx); for ii=1:nbx Jbx(ii,2+6*(ii-1))=1.0; end
 lbx = wall*ones(nbx, 1);
 ubx = 1e+4*ones(nbx, 1);
 Jbu = zeros(nbu, nu); for ii=1:nbu Jbu(ii,ii)=1.0; end
-lbu = -10.0*ones(nbu, 1);
-ubu =  10.0*ones(nbu, 1);
-
+lbu = -1.0*ones(nbu, 1);
+ubu =  1.0*ones(nbu, 1);
 
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
-% dims
+ocp_model.set('name', model_name);
 ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-ocp_model.set('dim_ny', ny);
-ocp_model.set('dim_ny_e', ny_e);
-if (ng>0)
-	ocp_model.set('dim_ng', ng);
-	ocp_model.set('dim_ng_e', ng_e);
-elseif (nh>0)
-	ocp_model.set('dim_nh', nh);
-	ocp_model.set('dim_nh_e', nh_e);
-else
-	ocp_model.set('dim_nbx', nbx);
-	ocp_model.set('dim_nbu', nbu);
-end
-ocp_model.set('dim_np', np);
+
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -210,23 +194,26 @@ end
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', param_scheme);
 ocp_opts.set('param_scheme_N', N);
 ocp_opts.set('nlp_solver', nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', nlp_solver_exact_hessian);
 ocp_opts.set('regularize_method', regularize_method);
 ocp_opts.set('nlp_solver_ext_qp_res', nlp_solver_ext_qp_res);
+ocp_opts.set('nlp_solver_warm_start_first_qp', nlp_solver_warm_start_first_qp);
 if (strcmp(nlp_solver, 'sqp'))
 	ocp_opts.set('nlp_solver_max_iter', nlp_solver_max_iter);
 end
 ocp_opts.set('qp_solver', qp_solver);
-if (strcmp(qp_solver, 'partial_condensing_hpipm'))
+ocp_opts.set('qp_solver_iter_max', qp_solver_max_iter);
+ocp_opts.set('qp_solver_warm_start', qp_solver_warm_start);
+ocp_opts.set('qp_solver_cond_ric_alg', qp_solver_cond_ric_alg);
+if (~isempty(strfind(qp_solver, 'partial_condensing')))
 	ocp_opts.set('qp_solver_cond_N', qp_solver_cond_N);
-	ocp_opts.set('qp_solver_cond_ric_alg', qp_solver_cond_ric_alg);
+end
+if (strcmp(qp_solver, 'partial_condensing_hpipm'))
 	ocp_opts.set('qp_solver_ric_alg', qp_solver_ric_alg);
-	ocp_opts.set('qp_solver_warm_start', qp_solver_warm_start);
 end
 if (strcmp(dyn_type, 'explicit') || strcmp(dyn_type, 'implicit'))
 	ocp_opts.set('sim_method', sim_method);
@@ -237,18 +224,10 @@ if (strcmp(sim_method, 'irk_gnsf'))
 	ocp_opts.set('gnsf_detect_struct', gnsf_detect_struct);
 end
 
-%ocp_opts.opts_struct
-
-
 
 %% acados ocp
 % create ocp
 ocp = acados_ocp(ocp_model, ocp_opts);
-%ocp
-%ocp.C_ocp
-%ocp.C_ocp_ext_fun
-
-
 
 % set trajectory initialization
 x_traj_init = repmat(model.x_ref, 1, N+1);
@@ -273,54 +252,23 @@ time_ext = toc/nrep
 % get solution
 u = ocp.get('u');
 x = ocp.get('x');
-%u
-%x
-
 
 
 % statistics
-
 status = ocp.get('status');
 sqp_iter = ocp.get('sqp_iter');
 time_tot = ocp.get('time_tot');
 time_lin = ocp.get('time_lin');
 time_reg = ocp.get('time_reg');
 time_qp_sol = ocp.get('time_qp_sol');
+time_qp_solver_call = ocp.get('time_qp_solver_call');
 
-fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms], time_reg = %f [ms])\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_reg*1e3);
+fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms] (time_qp_solver_call = %f [ms]), time_reg = %f [ms])\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_qp_solver_call*1e3, time_reg*1e3);
 
-stat = ocp.get('stat');
-if (strcmp(nlp_solver, 'sqp'))
-	fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-	if size(stat,2)>7
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3), stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		if size(stat,2)>7
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,8), stat(ii,9), stat(ii,10), stat(ii,11));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-else % sqp_rti
-	fprintf('\niter\tqp_stat\tqp_iter');
-	if size(stat,2)>3
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3));
-		if size(stat,2)>3
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-end
+ocp.print('stat');
 
 
+%% figures
 % plot result
 %figure()
 %subplot(2, 1, 1)
@@ -332,26 +280,24 @@ end
 %ylabel('u')
 %xlabel('sample')
 
-
-% figures
-
 for ii=1:N
 	cur_pos = x(:,ii);
 	visualize;
 end
 
+stat = ocp.get('stat');
 if (strcmp(nlp_solver, 'sqp'))
-	figure(2);
-	plot([0: size(stat,1)-1], log10(stat(:,2)), 'r-x');
+	figure();
+	plot(0: size(stat,1)-1, log10(stat(:,2)), 'r-x');
 	hold on
-	plot([0: size(stat,1)-1], log10(stat(:,3)), 'b-x');
-	plot([0: size(stat,1)-1], log10(stat(:,4)), 'g-x');
-	plot([0: size(stat,1)-1], log10(stat(:,5)), 'k-x');
+	plot(0: size(stat,1)-1, log10(stat(:,3)), 'b-x');
+	plot(0: size(stat,1)-1, log10(stat(:,4)), 'g-x');
+	plot(0: size(stat,1)-1, log10(stat(:,5)), 'k-x');
 	hold off
 	xlabel('iter')
-	ylabel('res')
+	ylabel('residuals')
+    legend('res stat', 'res eq', 'res ineq', 'res compl');
 end
-
 
 
 if status==0
@@ -364,5 +310,3 @@ end
 if is_octave()
     waitforbuttonpress;
 end
-
-return;

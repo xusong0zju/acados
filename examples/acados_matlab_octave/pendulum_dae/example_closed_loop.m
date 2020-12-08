@@ -37,16 +37,12 @@ clear all
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 %% options
-compile_mex = 'true'; % true, false
+compile_interface = 'auto'; % true, false
 codgen_model = 'true'; % true, false
-% compile_mex = 'false'; % true, false
-% codgen_model = 'false'; % true, false
 % simulation
 gnsf_detect_struct = 'true'; % true, false
 sim_method = 'irk'; % irk, irk_gnsf, [erk]
@@ -58,9 +54,8 @@ sim_newton_iter = 3;
 model_name = 'pend_dae';
 
 % ocp
-param_scheme = 'multiple_shooting_unif_grid';
 ocp_N = 50;
-nlp_solver = 'sqp'; % sqp, sqp_rti
+nlp_solver = 'sqp_rti'; % sqp, sqp_rti
 nlp_solver_exact_hessian = 'true';
 regularize_method = 'project_reduc_hess'; % no_regularize, project,...
     % project_reduc_hess, mirror, convexify
@@ -80,14 +75,13 @@ cost_type = 'linear_ls'; % linear_ls, ext_cost
 %% model
 model = pendulum_dae_model;
 %  sym_x = [xpos, ypos, alpha, vx, vy, valpha]
-% x0 = [1; -5; 1; 0.1; -0.5; 0.1];
 length_pendulum = 5;
 xsteady = [ 0; -length_pendulum; 0; 0; 0; 0];
 xtarget = [ 0; +length_pendulum; pi; 0; 0; 0];
 % xtarget = xsteady;
 uref = 0;
 
-alpha0 = 0;%.01;
+alpha0 = -.01;
 xp0 = length_pendulum * sin(alpha0);
 yp0 = - length_pendulum * cos(alpha0);
 x0 = [ xp0; yp0; alpha0; 0; 0; 0];
@@ -107,12 +101,9 @@ ny = nu+nx; % number of outputs in lagrange term
 ny_e = nx; % number of outputs in mayer term
 
 ng = 0; % number of general linear constraints intermediate stages
-ng_e = 0; % number of general linear constraints final stage
 nbx = 0; % number of bounds on state x
 
 nbu = nu; % number of bounds on controls u
-nh = 0;
-nh_e = 0;
 
 % cost
 % linear least square cost: y^T * W * y, where y = Vx * x + Vu * u - y_ref
@@ -134,25 +125,21 @@ lbu = -80*ones(nu, 1);
 ubu =  80*ones(nu, 1);
 
 
-
 %% acados ocp model
 ocp_model = acados_ocp_model();
 ocp_model.set('T', T);
 
-% dims
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-ocp_model.set('dim_nz', nz);
-if (strcmp(cost_type, 'linear_ls'))
-	ocp_model.set('dim_ny', ny);
-	ocp_model.set('dim_ny_e', ny_e);
+constraint_h = 1;
+if constraint_h
+    nh = length(model.expr_h);
+    ocp_model.set('constr_expr_h', model.expr_h);
+    lh =    0;
+    uh =  200;
+    ocp_model.set('constr_lh', lh);
+	ocp_model.set('constr_uh', uh);
+else
+    nh = 0;
 end
-ocp_model.set('dim_nbx', nbx);
-ocp_model.set('dim_nbu', nbu);
-ocp_model.set('dim_ng', ng);
-ocp_model.set('dim_ng_e', ng_e);
-ocp_model.set('dim_nh', nh);
-ocp_model.set('dim_nh_e', nh_e);
 
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
@@ -200,13 +187,6 @@ if (ng>0)
 	ocp_model.set('constr_C_e', C_e);
 	ocp_model.set('constr_lg_e', lg_e);
 	ocp_model.set('constr_ug_e', ug_e);
-elseif (nh>0)
-	ocp_model.set('constr_expr_h', model.expr_h);
-	ocp_model.set('constr_lh', lbu);
-	ocp_model.set('constr_uh', ubu);
-%	ocp_model.set('constr_expr_h_e', model.expr_h_e);
-%	ocp_model.set('constr_lh_e', lh_e);
-%	ocp_model.set('constr_uh_e', uh_e);
 else
 %	ocp_model.set('constr_Jbx', Jbx);
 %	ocp_model.set('constr_lbx', lbx);
@@ -219,12 +199,10 @@ end
 ocp_model.model_struct
 
 
-
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', param_scheme);
 ocp_opts.set('param_scheme_N', ocp_N);
 ocp_opts.set('nlp_solver', nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', nlp_solver_exact_hessian);
@@ -247,10 +225,9 @@ ocp_opts.set('sim_method_newton_iter', ocp_sim_method_newton_iter);
 ocp_opts.opts_struct
 
 
-
 %% acados ocp
-% create ocp
 ocp = acados_ocp(ocp_model, ocp_opts);
+ocp_model.set('name', model_name);
 
 
 %% acados sim model
@@ -265,9 +242,6 @@ end
 if isfield(model, 'sym_p')
     sim_model.set('sym_p', model.sym_p);
 end
-sim_model.set('dim_nx', nx);
-sim_model.set('dim_nu', nu);
-
 
 % Note: DAEs can only be used with implicit integrator
 sim_model.set('dyn_type', 'implicit');
@@ -276,11 +250,10 @@ sim_model.set('sym_xdot', model.sym_xdot);
 if isfield(model, 'sym_z')
 	sim_model.set('sym_z', model.sym_z);
 end
-sim_model.set('dim_nz', nz);
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', sim_num_stages);
 sim_opts.set('num_steps', sim_num_steps);
@@ -307,6 +280,7 @@ N_sim = 99;
 x_sim = zeros(nx, N_sim+1);
 x_sim(:,1) = x0; % initial state
 u_sim = zeros(nu, N_sim);
+z_sim = zeros(nz, N_sim);
 
 % initialization
 xdot0 = zeros(nx, 1);
@@ -337,22 +311,8 @@ for ii=1:N_sim
     end
 
 	ocp.solve();
+    ocp.print('stat');
 
-    stat = ocp.get('stat');
-    fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-    if size(stat,2)>7
-        fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-    end
-    fprintf('\n');
-    for jj=1:size(stat,1)
-        fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(jj,1), stat(jj,2), stat(jj,3), stat(jj,4), stat(jj,5), stat(jj,6), stat(jj,7));
-        if size(stat,2)>7
-            fprintf('\t%e\t%e\t%e\t%e', stat(jj,8), stat(jj,9), stat(jj,10), stat(jj,11));
-        end
-        fprintf('\n');
-    end
-    fprintf('\n');
-    
     status = ocp.get('status');
     sqp_iter(ii) = ocp.get('sqp_iter');
     sqp_time(ii) = ocp.get('time_tot');
@@ -401,13 +361,12 @@ for ii=1:N_sim
 
 	% get simulated state
 	x_sim(:,ii+1) = sim.get('xn');
-
+    z_sim(:,ii) = sim.get('zn');
 
 end
 format short e
 
 toc
-
 
 % trajectory plot
 figure;
@@ -450,7 +409,22 @@ end
 xp = x_sim(1,:);
 yp = x_sim(2,:);
 check = abs(xp.^2 + yp.^2 - length_pendulum^2);
-
-if any( max(abs(check)) > 1e-11 )
-    disp('note: check for constant pendulum length failed');
+tol_pendulum = 1e-10;
+if any( max(abs(check)) > tol_pendulum )
+    disp(['note: check for constant pendulum length failed, violation >' ...
+        num2str(tol_pendulum)]);
 end
+
+dist2target = norm( sim.get('xn') - xtarget )
+
+% eval constraint h
+ax_ = z_sim(1,:);
+ay_ = z_sim(2,:);
+h_vals = ax_.^2 + ay_.^2;
+h_violations = [ uh - h_vals; h_vals - lh ];
+max_h_violation = max(abs( h_violations( h_violations < 0 )));
+if isempty(max_h_violation)
+    max_h_violation = 0;
+end
+disp(['maximal constraint h violation   ' num2str( max_h_violation, '%e' ) ])
+

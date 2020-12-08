@@ -71,14 +71,19 @@ typedef struct
 
 typedef struct
 {
-    // no memory
-    void *dummy;
+	// memory
+	double time_sim;
+	double time_ad;
+	double time_la;
+
+	// workspace structs
 } sim_erk_memory;
 
 
 
 typedef struct
 {
+	// workspace mem
     double *rhs_forw_in;  // x + S + p
 
     double *K_traj;         // (stages*nX) or (steps*stages*nX) for adj
@@ -112,7 +117,7 @@ void *sim_erk_opts_assign(void *config, void *dims, void *raw_memory);
 //
 void sim_erk_opts_initialize_default(void *config, void *dims, void *opts_);
 //
-int sim_erk_opts_set(void *config_, void *opts_, const char *field, void *value);
+void sim_erk_opts_set(void *config_, void *opts_, const char *field, void *value);
 
 
 // memory

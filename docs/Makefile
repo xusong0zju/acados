@@ -62,11 +62,16 @@ doxygen:
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
+upload:
+	rsync -aP -e ssh $(BUILDDIR)/* acados_website@syscop.de:~/website_public/
+
 clean:
 	@echo Clean Sphinx
 	@for file in *.rst; do rm "$(BUILDDIR)/$${file%.*}.html" 2> /dev/null || true; done
 	@for file in $(GENERATED); do CPATH="$(BUILDDIR)/$${file}"; [ -f "$${CPATH}" -o -d "$${CPATH}" ] && rm -r "$${CPATH}" || true; done
 	@echo Clean doxygen
 	@rm -r $(DOXYBUILDDIR)
+	@rm -r $(BUILDDIR)
+
 
 .PHONY: help Makefile clean html default doxygen

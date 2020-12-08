@@ -83,6 +83,14 @@ Thumbs.db
 # Matlab #
 *.m~
 
+# Python #
+__pycache__/
+*.egg-info
+env/
+
+# Examples #
+c_generated_code
+
 # Misc #
 ########
 *.doc
@@ -102,7 +110,6 @@ cmakelint
 *.srctrldb
 *.srctrlprj
 .vs
-examples/python/__pycache__/
 build*
 *rti1401
 *.asv

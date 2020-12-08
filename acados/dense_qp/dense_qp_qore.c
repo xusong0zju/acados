@@ -109,31 +109,31 @@ void dense_qp_qore_opts_set(void *config_, void *opts_, const char *field, void 
 
     if (!strcmp(field, "tol_stat"))
     {
-		// TODO set solver exit tolerance
+        // TODO set solver exit tolerance
     }
     else if (!strcmp(field, "tol_eq"))
     {
-		// TODO set solver exit tolerance
+        // TODO set solver exit tolerance
     }
     else if (!strcmp(field, "tol_ineq"))
     {
-		// TODO set solver exit tolerance
+        // TODO set solver exit tolerance
     }
     else if (!strcmp(field, "tol_comp"))
     {
-		// TODO set solver exit tolerance
+        // TODO set solver exit tolerance
     }
     else if (!strcmp(field, "warm_start"))
     {
-		// TODO set solver warm start
+        // TODO set solver warm start
     }
-	else
-	{
-		printf("\nerror: dense_qp_qore_opts_set: wrong field: %s\n", field);
-		exit(1);
-	}
+    else
+    {
+        printf("\nerror: dense_qp_qore_opts_set: wrong field: %s\n", field);
+        exit(1);
+    }
 
-	return;
+    return;
 }
 
 
@@ -277,6 +277,33 @@ void *dense_qp_qore_memory_assign(void *config_, dense_qp_dims *dims, void *opts
            c_ptr);
 
     return mem;
+}
+
+
+
+void dense_qp_qore_memory_get(void *config_, void *mem_, const char *field, void* value)
+{
+    qp_solver_config *config = config_;
+    dense_qp_qore_memory *mem = mem_;
+
+    if(!strcmp(field, "time_qp_solver_call"))
+    {
+        double *tmp_ptr = value;
+        *tmp_ptr = mem->time_qp_solver_call;
+    }
+    else if(!strcmp(field, "iter"))
+    {
+        int *tmp_ptr = value;
+        *tmp_ptr = mem->iter;
+    }
+    else
+    {
+        printf("\nerror: dense_qp_qore_memory_get: field %s not available\n", field);
+        exit(1);
+    }
+
+    return;
+
 }
 
 
@@ -508,6 +535,9 @@ int dense_qp_qore(void *config_, dense_qp_in *qp_in, dense_qp_out *qp_out, void 
     info->total_time = acados_toc(&tot_timer);
     info->num_iter = num_iter;
 
+    mem->time_qp_solver_call = info->solve_QP_time;
+    mem->iter = num_iter;
+
     // compute slacks
     if (opts->compute_t)
     {
@@ -525,8 +555,8 @@ int dense_qp_qore(void *config_, dense_qp_in *qp_in, dense_qp_out *qp_out, void 
 
 void dense_qp_qore_eval_sens(void *config_, void *qp_in, void *qp_out, void *opts_, void *mem_, void *work_)
 {
-	printf("\nerror: dense_qp_qore_eval_sens: not implemented yet\n");
-	exit(1);
+    printf("\nerror: dense_qp_qore_eval_sens: not implemented yet\n");
+    exit(1);
 }
 
 
@@ -545,6 +575,7 @@ void dense_qp_qore_config_initialize_default(void *config_)
         (int (*)(void *, void *, void *)) & dense_qp_qore_memory_calculate_size;
     config->memory_assign =
         (void *(*) (void *, void *, void *, void *) ) & dense_qp_qore_memory_assign;
+    config->memory_get = &dense_qp_qore_memory_get;
     config->workspace_calculate_size =
         (int (*)(void *, void *, void *)) & dense_qp_qore_workspace_calculate_size;
     config->evaluate = (int (*)(void *, void *, void *, void *, void *, void *)) & dense_qp_qore;

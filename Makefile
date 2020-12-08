@@ -54,7 +54,7 @@ OBJS += acados/ocp_nlp/ocp_nlp_cost_nls.o
 OBJS += acados/ocp_nlp/ocp_nlp_cost_external.o
 OBJS += acados/ocp_nlp/ocp_nlp_constraints_common.o
 OBJS += acados/ocp_nlp/ocp_nlp_constraints_bgh.o
-OBJS += acados/ocp_nlp/ocp_nlp_constraints_bghp.o
+OBJS += acados/ocp_nlp/ocp_nlp_constraints_bgp.o
 OBJS += acados/ocp_nlp/ocp_nlp_dynamics_common.o
 OBJS += acados/ocp_nlp/ocp_nlp_dynamics_cont.o
 OBJS += acados/ocp_nlp/ocp_nlp_dynamics_disc.o
@@ -139,6 +139,7 @@ CLEAN_DEPS += qore_clean
 endif
 ifeq ($(ACADOS_WITH_OSQP), 1)
 STATIC_DEPS += osqp_static
+SHARED_DEPS += osqp_shared
 CLEAN_DEPS += osqp_clean
 endif
 
@@ -172,14 +173,14 @@ shared_library: $(SHARED_DEPS)
 	@echo
 
 blasfeo_static:
-	( cd $(BLASFEO_PATH); $(MAKE) static_library CC=$(CC) LA=$(BLASFEO_VERSION) TARGET=$(BLASFEO_TARGET) BLAS_API=0 )
+	( cd $(BLASFEO_PATH); $(MAKE) static_library CC=$(CC) LA=$(BLASFEO_VERSION) TARGET=$(BLASFEO_TARGET) MF=PANELMAJ BLAS_API=0 )
 	mkdir -p include/blasfeo/include
 	mkdir -p lib
 	cp $(BLASFEO_PATH)/include/*.h include/blasfeo/include
 	cp $(BLASFEO_PATH)/lib/libblasfeo.a lib
 
 blasfeo_shared:
-	( cd $(BLASFEO_PATH); $(MAKE) shared_library CC=$(CC) LA=$(BLASFEO_VERSION) TARGET=$(BLASFEO_TARGET) BLAS_API=0 )
+	( cd $(BLASFEO_PATH); $(MAKE) shared_library CC=$(CC) LA=$(BLASFEO_VERSION) TARGET=$(BLASFEO_TARGET) MF=PANELMAJ BLAS_API=0 )
 	mkdir -p include/blasfeo/include
 	mkdir -p lib
 	cp $(BLASFEO_PATH)/include/*.h include/blasfeo/include
@@ -218,7 +219,7 @@ qpoases_shared:
 	mkdir -p include/qpoases/include
 	mkdir -p lib
 	cp -r $(QPOASES_PATH)/include/* include/qpoases/include
-	cp $(QPOASES_PATH)/bin/libqpOASES_e.a lib
+	cp $(QPOASES_PATH)/bin/libqpOASES_e.so lib
 
 # TODO how is BLASFEO path set for QORE ?????
 qore_static: blasfeo_static
@@ -250,6 +251,12 @@ osqp_static: $(OSQP_LIB_STATIC)
 	mkdir -p lib
 	cp -r $(OSQP_PATH)/include/* include/osqp/include
 	mv libosqp.a lib
+
+osqp_shared: $(OSQP_LIB_SHARED)
+	mkdir -p include/osqp/include
+	mkdir -p lib
+	cp -r $(OSQP_PATH)/include/* include/osqp/include
+	mv libosqp.so lib
 
 examples_c: static_library
 	( cd examples/c; $(MAKE) examples TOP=$(TOP) )

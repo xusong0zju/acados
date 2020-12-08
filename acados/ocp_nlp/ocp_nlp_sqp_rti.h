@@ -48,7 +48,6 @@ extern "C" {
 
 // acados
 #include "acados/ocp_nlp/ocp_nlp_common.h"
-#include "acados/sim/sim_common.h"
 #include "acados/utils/types.h"
 
 
@@ -59,31 +58,31 @@ extern "C" {
 
 typedef struct
 {
-    void *qp_solver_opts;
-    void *regularize;
-    void **dynamics;     // dynamics_opts
-    void **cost;         // cost_opts
-    void **constraints;  // constraints_opts
+    ocp_nlp_opts *nlp_opts;
     int compute_dual_sol;
-    int reuse_workspace;
-    int num_threads;
-	int ext_qp_res;      // compute external QP residuals (i.e. at SQP level) at each SQP iteration (for debugging)
-	int qp_warm_start;
+    int ext_qp_res;           // compute external QP residuals (i.e. at SQP level) at each SQP iteration (for debugging)
+    int qp_warm_start;        // NOTE: this is not actually setting the warm_start! Just for compatibility with sqp.
+    bool warm_start_first_qp; // to set qp_warm_start in first iteration
+    int rti_phase;            // phase of RTI. Possible values 1 (preparation), 2 (feedback) 0 (both)
+    int print_level;     // verbosity
+
 } ocp_nlp_sqp_rti_opts;
 
 //
-int ocp_nlp_sqp_rti_opts_calculate_size(void *config, void *dims);
+int ocp_nlp_sqp_rti_opts_calculate_size(void *config_, void *dims_);
 //
-void *ocp_nlp_sqp_rti_opts_assign(void *config, void *dims, void *raw_memory);
+void *ocp_nlp_sqp_rti_opts_assign(void *config_, void *dims_, void *raw_memory);
 //
-void ocp_nlp_sqp_rti_opts_initialize_default(void *config, void *dims, void *opts);
+void ocp_nlp_sqp_rti_opts_initialize_default(void *config_, void *dims_, void *opts_);
 //
-void ocp_nlp_sqp_rti_opts_update(void *config, void *dims, void *opts);
+void ocp_nlp_sqp_rti_opts_update(void *config_, void *dims_, void *opts_);
 //
 void ocp_nlp_sqp_rti_opts_set(void *config_, void *opts_, const char *field, void* value);
 //
-void ocp_nlp_sqp_rti_dyanimcs_opts_set(void *config, void *opts, int stage,
-                                     const char *field, void *value);
+void ocp_nlp_sqp_rti_opts_set_at_stage(void *config_, void *opts_, int stage,
+    const char *field, void* value);
+
+
 
 /************************************************
  * memory
@@ -91,40 +90,30 @@ void ocp_nlp_sqp_rti_dyanimcs_opts_set(void *config, void *opts, int stage,
 
 typedef struct
 {
-	// QP in & out
-    ocp_qp_in *qp_in;
-    ocp_qp_out *qp_out;
-	// QP stuff not entering the qp_in struct
-    struct blasfeo_dmat *dzduxt; // dzdux transposed
-    struct blasfeo_dvec *z_alg; // z_alg
-
-    //    ocp_nlp_dims *dims;
-    void *qp_solver_mem;
-    void *regularize_mem;
-
-    void **dynamics;     // dynamics memory
-    void **cost;         // cost memory
-    void **constraints;  // constraints memory
-
     // nlp memory
     ocp_nlp_memory *nlp_mem;
 
-    int status;
-
     double time_qp_sol;
+    double time_qp_solver_call;
+    double time_qp_xcond;
     double time_lin;
     double time_reg;
     double time_tot;
 
-	double *stat;
-	int stat_m;
-	int stat_n;
+    // statistics
+    double *stat;
+    int stat_m;
+    int stat_n;
+
+    int status;
+
 } ocp_nlp_sqp_rti_memory;
 
 //
-int ocp_nlp_sqp_rti_memory_calculate_size(void *config, void *dims, void *opts_);
+int ocp_nlp_sqp_rti_memory_calculate_size(void *config_, void *dims_, void *opts_);
 //
-void *ocp_nlp_sqp_rti_memory_assign(void *config, void *dims, void *opts_, void *raw_memory);
+void *ocp_nlp_sqp_rti_memory_assign(void *config_, void *dims_, void *opts_,
+    void *raw_memory);
 
 
 
@@ -134,23 +123,21 @@ void *ocp_nlp_sqp_rti_memory_assign(void *config, void *dims, void *opts_, void 
 
 typedef struct
 {
-	// temp QP in & out (to be used as workspace)
+    ocp_nlp_workspace *nlp_work;
+
+    // temp QP in & out (to be used as workspace in param sens)
     ocp_qp_in *tmp_qp_in;
     ocp_qp_out *tmp_qp_out;
 
-    // QP solver
-    void *qp_work;
-	ocp_qp_res *qp_res;
-	ocp_qp_res_ws *qp_res_ws;
+    // qp residuals
+    ocp_qp_res *qp_res;
+    ocp_qp_res_ws *qp_res_ws;
 
-    void **dynamics;     // dynamics_workspace
-    void **cost;         // cost_workspace
-    void **constraints;  // constraints_workspace
 
-} ocp_nlp_sqp_rti_work;
+} ocp_nlp_sqp_rti_workspace;
 
 //
-int ocp_nlp_sqp_rti_workspace_calculate_size(void *config, void *dims, void *opts_);
+int ocp_nlp_sqp_rti_workspace_calculate_size(void *config_, void *dims_, void *opts_);
 
 
 
@@ -158,14 +145,20 @@ int ocp_nlp_sqp_rti_workspace_calculate_size(void *config, void *dims, void *opt
  * functions
  ************************************************/
 
+void ocp_nlp_sqp_rti_preparation_step(void *config_, void *dims_,
+    void *nlp_in_, void *nlp_out_, void *opts, void *mem_, void *work_);
 //
-int ocp_nlp_sqp_rti(void *config, void *dims, void *nlp_in, void *nlp_out,
-                void *args, void *mem, void *work_);
+void ocp_nlp_sqp_rti_feedback_step(void *config_, void *dims_,
+    void *nlp_in_, void *nlp_out_, void *opts_, void *mem_, void *work_);
+//
+int ocp_nlp_sqp_rti(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
+    void *opts_, void *mem_, void *work_);
 //
 void ocp_nlp_sqp_rti_config_initialize_default(void *config_);
 //
-int ocp_nlp_sqp_rti_precompute(void *config_, void *dims_, void *nlp_in_, void *nlp_out_,
-                void *opts_, void *mem_, void *work_);
+int ocp_nlp_sqp_rti_precompute(void *config_, void *dims_,
+    void *nlp_in_, void *nlp_out_, void *opts_, void *mem_, void *work_);
+
 
 
 #ifdef __cplusplus

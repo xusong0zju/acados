@@ -37,12 +37,12 @@ clear VARIABLES
 addpath('../pendulum_dae/');
 
 i_method = 0;
-for integrator = {'irk', 'irk_gnsf'}
+for integrator = {'irk_gnsf', 'irk'}
     i_method = i_method + 1;
     method = integrator{1};
 
     %% arguments
-    compile_mex = 'true'; % true, false
+    compile_interface = 'auto'; % true, false
     codgen_model = 'true'; % true, false
     gnsf_detect_struct = 'true'; % true, false
     % method = 'irk'; % irk, irk_gnsf, [erk]
@@ -51,7 +51,7 @@ for integrator = {'irk', 'irk_gnsf'}
     num_stages = 3;
     num_steps = 3;
     newton_iter = 3;
-    model_name = ['inv_pend_dae_' method];
+    model_name = ['pend_dae_' method];
 
     length_pendulum = 5;
     alpha0 = .01;
@@ -82,9 +82,6 @@ for integrator = {'irk', 'irk_gnsf'}
     if isfield(model, 'sym_p')
         sim_model.set('sym_p', model.sym_p);
     end
-    sim_model.set('dim_nx', nx);
-    sim_model.set('dim_nu', nu);
-    
     
     % Note: DAEs can only be used with implicit integrator
     sim_model.set('dyn_type', 'implicit');
@@ -93,11 +90,10 @@ for integrator = {'irk', 'irk_gnsf'}
     if isfield(model, 'sym_z')
         sim_model.set('sym_z', model.sym_z);
     end
-    sim_model.set('dim_nz', nz);
     
     %% acados sim opts
     sim_opts = acados_sim_opts();
-    sim_opts.set('compile_mex', compile_mex);
+    sim_opts.set('compile_interface', compile_interface);
     sim_opts.set('codgen_model', codgen_model);
     sim_opts.set('num_stages', num_stages);
     sim_opts.set('num_steps', num_steps);
@@ -166,12 +162,21 @@ for integrator = {'irk', 'irk_gnsf'}
         z_ref = z;
         S_alg_ref = S_alg;
     else
-        err_x = norm(x_sim - x_sim_ref)
-        err_S_forw = norm(S_forw - S_forw_ref)
-        err_S_adj = norm(S_adj - S_adj_ref)
-        err_z = norm(z - z_ref)
-        err_S_alg = norm(S_alg - S_alg_ref)
+%         S_alg
+%         S_alg_ref
+
+        err_x = norm(x_sim - x_sim_ref);
+        err_S_forw = norm(S_forw - S_forw_ref);
+        err_S_adj = norm(S_adj - S_adj_ref);
+        err_z = norm(z - z_ref);
+        err_S_alg = norm(S_alg - S_alg_ref);
         err = max([err_x, err_S_forw, err_S_adj, err_z, err_S_alg]);
+        fprintf(['\nerr_x\t\t' num2str(err_x, '%e')]);
+        fprintf(['\nerr_S_forw\t' num2str(err_S_forw, '%e')]);
+        fprintf(['\nerr_S_adj\t' num2str(err_S_adj, '%e')]);
+        fprintf(['\nerr_z\t\t' num2str(err_z, '%e')]);
+        fprintf(['\nerr_S_alg\t' num2str(err_S_alg, '%e')]);
+
         if max(err > required_accuracy )
             error(strcat('test_sim_dae FAIL: error larger than required accuracy:',...
                 num2str(required_accuracy), ' for integrator: ', method));
@@ -181,4 +186,4 @@ for integrator = {'irk', 'irk_gnsf'}
 
 end
 
-fprintf('\nTEST_SIM_DAE: success!\n\n');
+fprintf('\n\nTEST_SIM_DAE: success!\n\n');

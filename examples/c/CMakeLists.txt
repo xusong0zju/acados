@@ -238,18 +238,12 @@ add_test(sim_gnsf_crane sim_gnsf_crane)
 add_executable(simple_dae_example simple_dae_example.c
     simple_dae_model/simple_dae_impl_ode_fun.c
     simple_dae_model/simple_dae_impl_ode_jac_x_xdot_u_z.c
-    simple_dae_model/simple_dae_impl_ode_fun_jac_x_xdot_z.c)
+    simple_dae_model/simple_dae_impl_ode_fun_jac_x_xdot_z.c
+    simple_dae_model/simple_dae_constr_h_fun_jac_ut_xt.c
+    simple_dae_model/simple_dae_constr_h_fun_jac_ut_xt_hess.c)
     
 target_link_libraries(simple_dae_example acados)
 add_test(simple_dae_example simple_dae_example)
-
-# -------------------- pendulum_scqp
-add_executable(pendulum_scqp pendulum_scqp.cpp
-    pendulum_model/pendulum_ode_expl_vde_forw.c
-    pendulum_model/constraint.c
-    pendulum_model/position.c)
-target_link_libraries(pendulum_scqp acados)
-add_test(pendulum_scqp pendulum_scqp)
 
 # -------------------- mass_spring
 add_executable(mass_spring_example no_interface_examples/mass_spring_example.c no_interface_examples/mass_spring_model/mass_spring_qp.c)
@@ -281,9 +275,9 @@ add_executable(sim_wt_model_nx3 sim_wt_model_nx3.c ${WT_MODEL_NX3_SRC})
 target_link_libraries(sim_wt_model_nx3 acados)
 add_test(sim_wt_model_nx3 sim_wt_model_nx3)
 
-#add_executable(ocp_qp ocp_qp.c)
-#target_link_libraries(ocp_qp acados)
-#add_test(ocp_qp ocp_qp)
+add_executable(ocp_qp ocp_qp.c)
+target_link_libraries(ocp_qp acados)
+add_test(ocp_qp ocp_qp)
 
 # -------------------- dense_qp
 add_executable(dense_qp dense_qp.c)

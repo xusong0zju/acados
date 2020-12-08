@@ -34,20 +34,14 @@
 %% example of closed loop simulation
 clear all
 
-
-
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
-
-
 %% handy arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 % simulation
 sim_method = 'irk';
@@ -56,22 +50,28 @@ sim_num_stages = 4;
 sim_num_steps = 4;
 % ocp
 ocp_N = 40;
-ocp_param_scheme = 'multiple_shooting_unif_grid';
-ocp_nlp_solver = 'sqp';
-%ocp_nlp_solver = 'sqp_rti';
-%ocp_nlp_solver_exact_hessian = 'false';
-ocp_nlp_solver_exact_hessian = 'true';
-%regularize_method = 'no_regularize';
+%ocp_nlp_solver = 'sqp';
+ocp_nlp_solver = 'sqp_rti';
+ocp_nlp_solver_exact_hessian = 'false';
+%ocp_nlp_solver_exact_hessian = 'true';
+regularize_method = 'no_regularize';
 %regularize_method = 'project';
-regularize_method = 'project_reduc_hess';
+%regularize_method = 'project_reduc_hess';
 %regularize_method = 'mirror';
 %regularize_method = 'convexify';
-nlp_solver_max_iter = 100;
+ocp_nlp_solver_max_iter = 100;
+ocp_nlp_solver_ext_qp_res = 1;
+ocp_nlp_solver_warm_start_first_qp = 1;
 ocp_qp_solver = 'partial_condensing_hpipm';
 %ocp_qp_solver = 'full_condensing_hpipm';
+%ocp_qp_solver = 'full_condensing_qpoases';
+%ocp_qp_solver = 'partial_condensing_osqp';
 ocp_qp_solver_cond_N = 5;
+%ocp_qp_solver_cond_N = ocp_N;
 ocp_qp_solver_cond_ric_alg = 0;
 ocp_qp_solver_ric_alg = 0;
+ocp_qp_solver_warm_start = 1;
+ocp_qp_solver_max_iter = 50;
 %ocp_sim_method = 'erk';
 ocp_sim_method = 'irk';
 ocp_sim_method_num_stages = 4;
@@ -79,13 +79,11 @@ ocp_sim_method_num_steps = 2;
 ocp_cost_type = 'linear_ls';
 
 
-
 %% create model entries
 nfm = 4;    % number of free masses
 nm = nfm+1; % number of masses
 model = masses_chain_model(nfm);
 wall = -0.01;
-
 
 
 % dims
@@ -97,7 +95,6 @@ ny_e = nx; % number of outputs in mayer term
 nbx = nfm;
 nbu = nu;
 ng = 0;
-ng_e = 0;
 nh = 0;
 nh_e = 0;
 
@@ -112,33 +109,20 @@ yr_e = model.x_ref; % output reference in mayer term
 
 % constraints
 x0 = model.x0;
+%x0 = model.x_ref;
 Jbx = zeros(nbx, nx); for ii=1:nbx Jbx(ii,2+6*(ii-1))=1.0; end
 lbx = wall*ones(nbx, 1);
 ubx = 1e+4*ones(nbx, 1);
 Jbu = zeros(nbu, nu); for ii=1:nbu Jbu(ii,ii)=1.0; end
-lbu = -10.0*ones(nbu, 1);
-ubu =  10.0*ones(nbu, 1);
-
+lbu = -1.0*ones(nbu, 1);
+ubu =  1.0*ones(nbu, 1);
 
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
 % dims
 ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-ocp_model.set('dim_ny', ny);
-ocp_model.set('dim_ny_e', ny_e);
-if (ng>0)
-	ocp_model.set('dim_ng', ng);
-	ocp_model.set('dim_ng_e', ng_e);
-elseif (nh>0)
-	ocp_model.set('dim_nh', nh);
-	ocp_model.set('dim_nh_e', nh_e);
-else
-	ocp_model.set('dim_nbx', nbx);
-	ocp_model.set('dim_nbu', nbu);
-end
+
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -197,44 +181,39 @@ end
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', ocp_param_scheme);
 ocp_opts.set('param_scheme_N', ocp_N);
 ocp_opts.set('nlp_solver', ocp_nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', ocp_nlp_solver_exact_hessian);
 ocp_opts.set('regularize_method', regularize_method);
+ocp_opts.set('nlp_solver_ext_qp_res', ocp_nlp_solver_ext_qp_res);
+ocp_opts.set('nlp_solver_warm_start_first_qp', ocp_nlp_solver_warm_start_first_qp);
 if (strcmp(ocp_nlp_solver, 'sqp'))
-	ocp_opts.set('nlp_solver_max_iter', nlp_solver_max_iter);
+	ocp_opts.set('nlp_solver_max_iter', ocp_nlp_solver_max_iter);
 end
 ocp_opts.set('qp_solver', ocp_qp_solver);
-if (strcmp(ocp_qp_solver, 'partial_condensing_hpipm'))
+ocp_opts.set('qp_solver_iter_max', ocp_qp_solver_max_iter);
+ocp_opts.set('qp_solver_warm_start', ocp_qp_solver_warm_start);
+ocp_opts.set('qp_solver_cond_ric_alg', ocp_qp_solver_cond_ric_alg);
+if (~isempty(strfind(ocp_qp_solver, 'partial_condensing')))
 	ocp_opts.set('qp_solver_cond_N', ocp_qp_solver_cond_N);
-	ocp_opts.set('qp_solver_cond_ric_alg', ocp_qp_solver_cond_ric_alg);
+end
+if (strcmp(ocp_qp_solver, 'partial_condensing_hpipm'))
 	ocp_opts.set('qp_solver_ric_alg', ocp_qp_solver_ric_alg);
 end
 ocp_opts.set('sim_method', ocp_sim_method);
 ocp_opts.set('sim_method_num_stages', ocp_sim_method_num_stages);
 ocp_opts.set('sim_method_num_steps', ocp_sim_method_num_steps);
 
-%ocp_opts.opts_struct
-
-
 
 %% acados ocp
 % create ocp
 ocp = acados_ocp(ocp_model, ocp_opts);
-%ocp
-%ocp.C_ocp
-%ocp.C_ocp_ext_fun
-
 
 
 %% acados sim model
 sim_model = acados_sim_model();
-% dims
-sim_model.set('dim_nx', nx);
-sim_model.set('dim_nu', nu);
 % symbolics
 sim_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -253,22 +232,16 @@ else % irk
 	sim_model.set('dyn_expr_f', model.expr_f_impl);
 end
 
-%sim_model.model_struct
-
 
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', sim_num_stages);
 sim_opts.set('num_steps', sim_num_steps);
 sim_opts.set('method', sim_method);
 sim_opts.set('sens_forw', sim_sens_forw);
-
-%sim_opts.opts_struct
-
-
 
 %% acados sim
 % create sim
@@ -306,6 +279,9 @@ for ii=1:n_sim
 	ocp.set('init_pi', pi_traj_init);
 
 	% solve OCP
+	ocp.set('rti_phase', 1);
+	ocp.solve();
+	ocp.set('rti_phase', 2);
 	ocp.solve();
 
 	if 1
@@ -313,9 +289,15 @@ for ii=1:n_sim
 		sqp_iter = ocp.get('sqp_iter');
 		time_tot = ocp.get('time_tot');
 		time_lin = ocp.get('time_lin');
+		time_reg = ocp.get('time_reg');
 		time_qp_sol = ocp.get('time_qp_sol');
+		time_qp_solver_call = ocp.get('time_qp_solver_call');
+		qp_iter = ocp.get('qp_iter');
 
-		fprintf('\nstatus = %d, sqp_iter = %d, time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms])\n', status, sqp_iter, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3);
+		fprintf('\nstatus = %d, sqp_iter = %d, time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms] (time_qp_solver_call = %f [ms]), time_reg = %f [ms])\n', status, sqp_iter, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_qp_solver_call*1e3, time_reg*1e3);
+%		fprintf('%e %d\n', time_qp_solver_call, qp_iter);
+
+%		ocp.print('stat');
 	end
 
 	% get solution
@@ -330,6 +312,11 @@ for ii=1:n_sim
 
 	% get solution for sim
 	u_sim(:,ii) = ocp.get('u', 0);
+
+	% overwrite control to perturb the system
+%	if(ii<=5)
+%		u_sim(:,ii) = [-1; 1; 1];
+%	end
 
 	% set initial state of sim
 	sim.set('x', x_sim(:,ii));
@@ -347,6 +334,8 @@ end
 avg_time_solve = toc/n_sim
 
 
+u_sim;
+x_sim;
 
 % print solution
 for ii=1:n_sim+1
@@ -368,5 +357,3 @@ end
 if is_octave()
     waitforbuttonpress;
 end
-
-return;

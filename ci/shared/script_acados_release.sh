@@ -32,7 +32,8 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
-COVERAGE="${COVERAGE:-}";
+# COVERAGE="${COVERAGE:-}";
+
 
 export MATLABPATH="${ACADOS_INSTALL_DIR}/lib:${MATLABPATH}";
 
@@ -44,7 +45,7 @@ function build_acados {
 		ACADOS_LINT='OFF';
 	fi
 
-	if [ "${ACADOS_UNIT_TESTS}" = 'ON' ]; then
+	if [[ "${ACADOS_UNIT_TESTS}" = 'ON' || "${ACADOS_PYTHON}" = 'ON' ]]; then
 		ACADOS_WITH_QPOASES='ON';
 	fi
 
@@ -56,28 +57,43 @@ function build_acados {
 		-D CMAKE_BUILD_TYPE="${BUILD_TYPE}" \
 		-D ACADOS_UNIT_TESTS="${ACADOS_UNIT_TESTS}" \
 		-D ACADOS_WITH_QPOASES="${ACADOS_WITH_QPOASES}" \
+		-D ACADOS_WITH_QPDUNES="${ACADOS_WITH_QPDUNES}" \
+		-D ACADOS_WITH_OSQP="${ACADOS_WITH_OSQP}" \
 		-D ACADOS_LINT="${ACADOS_LINT}" \
 		-D ACADOS_INSTALL_DIR="${ACADOS_INSTALL_DIR}" \
 		-D Matlab_ROOT_DIR="${MATLAB_ROOT}" \
-		-D SWIG_MATLAB="${SWIG_MATLAB}" \
 		-D COVERAGE="${COVERAGE}" \
-		-D SWIG_PYTHON="${SWIG_PYTHON}" \
 		-D BUILD_SHARED_LIBS=ON \
 		-D ACADOS_EXAMPLES="${ACADOS_EXAMPLES}" \
 		-D MATLAB_EXECUTABLE="${MATLAB_EXECUTABLE}" \
 		-D ACADOS_MATLAB="${ACADOS_MATLAB}" \
 		-D ACADOS_OCTAVE="${ACADOS_OCTAVE}" \
+		-D ACADOS_OCTAVE_TEMPLATE="${ACADOS_OCTAVE_TEMPLATE}" \
+		-D ACADOS_PYTHON="${ACADOS_PYTHON}" \
 		..;
+	[ $? -ne 0 ] && exit 110;
+	
 	if [ "${ACADOS_LINT}" = 'ON' ]; then
 		cmake --build build --target lint;
 		[ $? -ne 0 ] && exit 110;
 	fi
 
 	cmake --build build;
+	[ $? -ne 0 ] && exit 110;
+
 	cmake --build build --target install;
+	[ $? -ne 0 ] && exit 110;
+
+    if [[ "${ACADOS_PYTHON}" = 'ON' || "${ACADOS_OCTAVE_TEMPLATE}" = 'ON' ]] ;
+    then
+        source "${SCRIPT_DIR}/install_python_dependencies.sh";
+        pushd interfaces/acados_template;
+            pip install .
+        popd;
+        source "${SCRIPT_DIR}/install_t_renderer.sh";
+    fi
 
 	# Run ctest
-	# TODO: test matlab/python
 	cmake -E chdir build ctest -V; # use -V for full output # --output-on-failure for less
 
 	[ $? -ne 0 ] && exit 100;

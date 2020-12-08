@@ -65,11 +65,6 @@ if(NOT ACADOS_WITH_OSQP)
     list(REMOVE_ITEM ACADOS_SRC "${PROJECT_SOURCE_DIR}/acados/ocp_qp/ocp_qp_osqp.c")
 endif()
 
-list(REMOVE_ITEM ACADOS_SRC "${PROJECT_SOURCE_DIR}/acados/sim/sim_discrete_model.c")
-list(REMOVE_ITEM ACADOS_SRC "${PROJECT_SOURCE_DIR}/acados/broken_src/ocp_nlp_sm_gn.c")
-list(REMOVE_ITEM ACADOS_SRC "${PROJECT_SOURCE_DIR}/acados/broken_src/ocp_nlp_sqp_bkp.c")
-list(REMOVE_ITEM ACADOS_SRC "${PROJECT_SOURCE_DIR}/acados/broken_src/ocp_qp_ooqp.c")
-
 # Define acados library
 add_library(acados ${ACADOS_SRC})
 
@@ -86,6 +81,14 @@ target_include_directories(acados
         $<BUILD_INTERFACE:${EXTERNAL_SRC_DIR}>
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/interfaces>
         $<INSTALL_INTERFACE:include>)
+
+# OPENMP
+# find_package(OpenMP)
+if(ACADOS_WITH_OPENMP)
+    target_link_libraries(acados PUBLIC OpenMP::OpenMP_CXX)
+
+    target_compile_definitions(acados PUBLIC ACADOS_WITH_OPENMP)
+endif()
 
 # HPMPC must come before BLASFEO!
 if(ACADOS_WITH_HPMPC)
@@ -137,11 +140,6 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
     target_compile_definitions(acados PUBLIC MEASURE_TIMINGS)
 endif()
 
-if(SWIG_PYTHON OR SWIG_MATLAB)
-    find_package(Casadi REQUIRED)
-    target_link_libraries(acados PUBLIC casadi)
-endif()
-
 # Only test acados library for coverage
 if(COVERAGE MATCHES "lcov")
     include(CodeCoverage)
@@ -167,7 +165,13 @@ install(EXPORT acadosTargets DESTINATION cmake)
 
 configure_package_config_file(${PROJECT_SOURCE_DIR}/cmake/acadosConfig.cmake.in
                               ${CMAKE_CURRENT_BINARY_DIR}/cmake/acadosConfig.cmake
-                              INSTALL_DESTINATION cmake)
+                              INSTALL_DESTINATION cmake
+                              PATH_VARS ACADOS_WITH_HPMPC 
+                                        ACADOS_WITH_QORE
+                                        ACADOS_WITH_QPOASES
+                                        ACADOS_WITH_QPDUNES
+                                        ACADOS_WITH_OSQP
+                                        ACADOS_WITH_OOQP)
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cmake/acadosConfig.cmake
         DESTINATION cmake)

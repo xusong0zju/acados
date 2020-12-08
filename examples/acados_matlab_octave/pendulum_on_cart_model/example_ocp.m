@@ -37,31 +37,28 @@ clear VARIABLES
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 %% arguments
-compile_mex = 'true';
+compile_interface = 'true'; %'auto';
 codgen_model = 'true';
 gnsf_detect_struct = 'true';
 
 % discretization
-param_scheme = 'multiple_shooting_unif_grid';
 N = 100;
 h = 0.01;
 
 nlp_solver = 'sqp';
 %nlp_solver = 'sqp_rti';
-nlp_solver_exact_hessian = 'false';
-%nlp_solver_exact_hessian = 'true';
-regularize_method = 'no_regularize';
+%nlp_solver_exact_hessian = 'false';
+nlp_solver_exact_hessian = 'true';
+%regularize_method = 'no_regularize';
 %regularize_method = 'project';
-%regularize_method = 'project_reduc_hess';
+regularize_method = 'project_reduc_hess';
 %regularize_method = 'mirror';
 %regularize_method = 'convexify';
-nlp_solver_max_iter = 100;
+nlp_solver_max_iter = 20; %100;
 nlp_solver_tol_stat = 1e-8;
 nlp_solver_tol_eq   = 1e-8;
 nlp_solver_tol_ineq = 1e-8;
@@ -74,6 +71,7 @@ qp_solver_cond_N = 5;
 qp_solver_cond_ric_alg = 0;
 qp_solver_ric_alg = 0;
 qp_solver_warm_start = 2;
+qp_solver_max_iter = 100;
 %sim_method = 'erk';
 sim_method = 'irk';
 %sim_method = 'irk_gnsf';
@@ -134,20 +132,8 @@ ubu =  80*ones(nu, 1);
 %% acados ocp model
 ocp_model = acados_ocp_model();
 ocp_model.set('name', model_name);
-% dims
 ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-if (strcmp(cost_type, 'linear_ls'))
-	ocp_model.set('dim_ny', ny);
-	ocp_model.set('dim_ny_e', ny_e);
-end
-ocp_model.set('dim_nbx', nbx);
-ocp_model.set('dim_nbu', nbu);
-ocp_model.set('dim_ng', ng);
-ocp_model.set('dim_ng_e', ng_e);
-ocp_model.set('dim_nh', nh);
-ocp_model.set('dim_nh_e', nh_e);
+
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -210,9 +196,8 @@ disp(ocp_model.model_struct)
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', param_scheme);
 ocp_opts.set('param_scheme_N', N);
 ocp_opts.set('nlp_solver', nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', nlp_solver_exact_hessian);
@@ -226,12 +211,15 @@ if (strcmp(nlp_solver, 'sqp'))
 	ocp_opts.set('nlp_solver_tol_comp', nlp_solver_tol_comp);
 end
 ocp_opts.set('qp_solver', qp_solver);
-if (strcmp(qp_solver, 'partial_condensing_hpipm'))
-	ocp_opts.set('qp_solver_cond_N', qp_solver_cond_N);
-	ocp_opts.set('qp_solver_ric_alg', qp_solver_ric_alg);
-end
 ocp_opts.set('qp_solver_cond_ric_alg', qp_solver_cond_ric_alg);
 ocp_opts.set('qp_solver_warm_start', qp_solver_warm_start);
+ocp_opts.set('qp_solver_iter_max', qp_solver_max_iter);
+if (~isempty(strfind(qp_solver, 'partial_condensing')))
+	ocp_opts.set('qp_solver_cond_N', qp_solver_cond_N);
+end
+if (strcmp(qp_solver, 'partial_condensing_hpipm'))
+	ocp_opts.set('qp_solver_ric_alg', qp_solver_ric_alg);
+end
 ocp_opts.set('sim_method', sim_method);
 ocp_opts.set('sim_method_num_stages', sim_method_num_stages);
 ocp_opts.set('sim_method_num_steps', sim_method_num_steps);
@@ -266,11 +254,14 @@ ocp.set('init_x', x_traj_init);
 ocp.set('init_u', u_traj_init);
 
 % change number of sqp iterations
-ocp.set('nlp_solver_max_iter', 20);
+%ocp.set('nlp_solver_max_iter', 20);
 
 % solve
 tic;
+
+% solve ocp
 ocp.solve();
+
 time_ext = toc;
 % TODO: add getter for internal timing
 fprintf(['time for ocp.solve (matlab tic-toc): ', num2str(time_ext), ' s\n'])
@@ -289,36 +280,7 @@ time_qp_sol = ocp.get('time_qp_sol');
 
 fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms], time_reg = %f [ms])\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_reg*1e3);
 
-stat = ocp.get('stat');
-if (strcmp(nlp_solver, 'sqp'))
-	fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-	if size(stat,2)>7
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3), stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		if size(stat,2)>7
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,8), stat(ii,9), stat(ii,10), stat(ii,11));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-else % sqp_rti
-	fprintf('\niter\tqp_stat\tqp_iter');
-	if size(stat,2)>3
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3));
-		if size(stat,2)>3
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-end
+ocp.print('stat');
 
 
 %% figures
@@ -328,7 +290,7 @@ for ii=1:N+1
 %	visualize;
 end
 
-figure(2);
+figure;
 subplot(2,1,1);
 plot(0:N, x);
 xlim([0 N]);
@@ -338,22 +300,23 @@ plot(0:N-1, u);
 xlim([0 N]);
 legend('F');
 
+stat = ocp.get('stat');
 if (strcmp(nlp_solver, 'sqp'))
-	figure(3);
-% 	plot([0: size(stat,1)-1], log10(stat(:,2)), 'r-x');
-% 	hold on
-% 	plot([0: size(stat,1)-1], log10(stat(:,3)), 'b-x');
-% 	plot([0: size(stat,1)-1], log10(stat(:,4)), 'g-x');
-% 	plot([0: size(stat,1)-1], log10(stat(:,5)), 'k-x');
-	semilogy(0: size(stat,1)-1, stat(:,2), 'r-x');
-	hold on
-	semilogy(0: size(stat,1)-1, stat(:,3), 'b-x');
-	semilogy(0: size(stat,1)-1, stat(:,4), 'g-x');
-	semilogy(0: size(stat,1)-1, stat(:,5), 'k-x');
+	figure;
+ 	plot([0: size(stat,1)-1], log10(stat(:,2)), 'r-x');
+ 	hold on
+ 	plot([0: size(stat,1)-1], log10(stat(:,3)), 'b-x');
+ 	plot([0: size(stat,1)-1], log10(stat(:,4)), 'g-x');
+ 	plot([0: size(stat,1)-1], log10(stat(:,5)), 'k-x');
+%	semilogy(0: size(stat,1)-1, stat(:,2), 'r-x');
+%	hold on
+%	semilogy(0: size(stat,1)-1, stat(:,3), 'b-x');
+%	semilogy(0: size(stat,1)-1, stat(:,4), 'g-x');
+%	semilogy(0: size(stat,1)-1, stat(:,5), 'k-x');
     hold off
 	xlabel('iter')
 	ylabel('res')
-    legend('res g', 'res b', 'res d', 'res m');
+    legend('res stat', 'res eq', 'res ineq', 'res compl');
 end
 
 
@@ -364,48 +327,6 @@ else
 end
 
 
-% paramteric sensitivity of solution
-
-field = 'ex'; % equality constraint on states
-stage = 0;
-index = 0;
-ocp.eval_param_sens(field, stage, index);
-
-sens_u = ocp.get('sens_u');
-sens_x = ocp.get('sens_x');
-
-% plot sensitivity
-figure(4);
-subplot(2,1,1);
-plot(0:N, sens_x);
-xlim([0 N]);
-legend('p', 'theta', 'v', 'omega');
-subplot(2,1,2);
-plot(0:N-1, sens_u);
-xlim([0 N]);
-legend('F');
-
-% plot predicted solution
-figure(5);
-subplot(2,1,1);
-plot(0:N, x+sens_x);
-xlim([0 N]);
-legend('p', 'theta', 'v', 'omega');
-subplot(2,1,2);
-plot(0:N-1, u+sens_u);
-xlim([0 N]);
-legend('F');
-
-for ii=1:N+1
-	x_cur = x(:,ii)+sens_x(:,ii);
-%	visualize;
-end
-
-
-
 if is_octave()
     waitforbuttonpress;
 end
-
-return;
-

@@ -78,8 +78,7 @@ endif
 
 EXAMPLES =
 EXAMPLES += dense_qp
-##EXAMPLES += ocp_qp
-EXAMPLES += pendulum_scqp
+EXAMPLES += ocp_qp
 EXAMPLES += sim_wt_model_nx3
 EXAMPLES += sim_wt_model_nx6
 EXAMPLES += sim_pendulum_dae
@@ -105,8 +104,7 @@ examples: $(EXAMPLES)
 # run all
 RUN_EXAMPLES =
 RUN_EXAMPLES += run_dense_qp
-##RUN_EXAMPLES += run_ocp_qp
-RUN_EXAMPLES += run_pendulum_scqp
+RUN_EXAMPLES += run_ocp_qp
 RUN_EXAMPLES += run_sim_wt_model_nx3
 RUN_EXAMPLES += run_sim_wt_model_nx6
 RUN_EXAMPLES += run_sim_pendulum_dae
@@ -131,6 +129,7 @@ RUN_EXAMPLES += run_simple_dae_example
 #RUN_EXAMPLES = run_mass_spring_nmpc_example
 #RUN_EXAMPLES = run_regularization
 #RUN_EXAMPLES = run_mass_spring_example
+#RUN_EXAMPLES = run_nonlinear_chain_ocp_nlp
 
 run_examples: $(RUN_EXAMPLES)
 
@@ -469,28 +468,6 @@ run_nonlinear_chain_ocp_nlp:
 
 
 #################################################
-# pendulum model
-#################################################
-
-PENDULUM_OBJS = 
-PENDULUM_OBJS += pendulum_model/pendulum_ode_expl_vde_forw.o
-PENDULUM_OBJS += pendulum_model/pendulum_ode_expl_ode_hess.o
-PENDULUM_OBJS += pendulum_model/constraint.o
-PENDULUM_OBJS += pendulum_model/position.o
-
-pendulum_scqp: $(PENDULUM_OBJS) pendulum_scqp.o
-	$(CXX) -o pendulum_scqp.out $(PENDULUM_OBJS) pendulum_scqp.o $(LDFLAGS) $(LIBS)
-	@echo
-	@echo " Example pendulum_scqp build complete."
-	@echo
-
-run_pendulum_scqp:
-	./pendulum_scqp.out
-
-
-
-
-#################################################
 # dense qp
 #################################################
 
@@ -514,8 +491,8 @@ run_dense_qp:
 
 OCP_QP = 
 
-ocp_qp: $(OCP_QP) no_interface_examples/ocp_qp.o
-	$(CCC) -o ocp_qp.out $(OCP_QP) no_interface_examples/ocp_qp.o $(LDFLAGS) $(LIBS)
+ocp_qp: $(OCP_QP) ocp_qp.o
+	$(CCC) -o ocp_qp.out $(OCP_QP) ocp_qp.o $(LDFLAGS) $(LIBS)
 	@echo
 	@echo " Example ocp_qp build complete."
 	@echo
@@ -607,4 +584,5 @@ clean_models:
 	rm -f wt_model_nx6/*.o
 	rm -f wt_model_nx6/nx6p2/*.o
 	rm -f pendulum_dae_model/*.o
+	rm -f pendulum_model/*.o
 

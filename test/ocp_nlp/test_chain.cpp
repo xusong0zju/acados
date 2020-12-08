@@ -147,7 +147,7 @@ ocp_nlp_cost_t cost_enum(std::string const& inString)
 {
     if (inString == "LINEAR_LS") return LINEAR_LS;
     if (inString == "NONLINEAR_LS") return NONLINEAR_LS;
-    if (inString == "EXTERNAL") return EXTERNALLY_PROVIDED;
+    if (inString == "EXTERNAL") return EXTERNAL;
 
     return (ocp_nlp_cost_t) -1;
 }
@@ -943,10 +943,10 @@ void setup_and_solve_nlp(int NN,
                 plan->nlp_cost[i] = NONLINEAR_LS;
             }
             break;
-        case EXTERNALLY_PROVIDED:
+        case EXTERNAL:
             for (int i = 0; i < NN; i++)
             {
-                plan->nlp_cost[i] = EXTERNALLY_PROVIDED;
+                plan->nlp_cost[i] = EXTERNAL;
             }
             plan->nlp_cost[NN] = LINEAR_LS;
             break;
@@ -954,7 +954,7 @@ void setup_and_solve_nlp(int NN,
             for (int i = 0; i <= NN; i++)
             {
                 if (i%3 == 0)
-                    plan->nlp_cost[i] = EXTERNALLY_PROVIDED;
+                    plan->nlp_cost[i] = EXTERNAL;
                 else if (i%3 == 1)
                     plan->nlp_cost[i] = LINEAR_LS;
                 else if (i%3 == 2)
@@ -1067,7 +1067,7 @@ void setup_and_solve_nlp(int NN,
 
     for (int i = 0; i <= NN; i++)
     {
-        if (plan->nlp_cost[i] != EXTERNALLY_PROVIDED)
+        if (plan->nlp_cost[i] != EXTERNAL)
         {
             ocp_nlp_dims_set_cost(config, dims, i, "ny", &ny[i]);
         }
@@ -1141,7 +1141,7 @@ void setup_and_solve_nlp(int NN,
                 external_function_casadi_create(&ls_cost_jac_casadi[i]);
                 break;
 
- 			case EXTERNALLY_PROVIDED:
+			case EXTERNAL:
 				select_external_stage_cost_casadi(i, NN, NMF, &external_cost[i]);
 				external_function_casadi_create(&external_cost[i]);
 				break;
@@ -1222,16 +1222,16 @@ void setup_and_solve_nlp(int NN,
                     BLASFEO_DMATEL(&stage_cost_ls->W, nx[i]+j, nx[i]+j) = diag_cost_u[j];
 
                 // y_ref
-                blasfeo_pack_dvec(nx[i], xref, &stage_cost_ls->y_ref, 0);
-                blasfeo_pack_dvec(nu[i], uref, &stage_cost_ls->y_ref, nx[i]);
+                blasfeo_pack_dvec(nx[i], xref, 1, &stage_cost_ls->y_ref, 0);
+                blasfeo_pack_dvec(nu[i], uref, 1, &stage_cost_ls->y_ref, nx[i]);
                 break;
 
             case NONLINEAR_LS:
 
                 stage_cost_nls = (ocp_nlp_cost_nls_model *) nlp_in->cost[i];
 
-                // nls_res_jac
-                stage_cost_nls->nls_res_jac = (external_function_generic *) &ls_cost_jac_casadi[i];
+                // nls_y_fun_jac
+                stage_cost_nls->nls_y_fun_jac = (external_function_generic *) &ls_cost_jac_casadi[i];
 
                 // W
                 blasfeo_dgese(ny[i], ny[i], 0.0, &stage_cost_nls->W, 0, 0);
@@ -1241,13 +1241,13 @@ void setup_and_solve_nlp(int NN,
                     BLASFEO_DMATEL(&stage_cost_nls->W, nx[i]+j, nx[i]+j) = diag_cost_u[j];
 
                 // y_ref
-                blasfeo_pack_dvec(nx[i], xref, &stage_cost_nls->y_ref, 0);
-                blasfeo_pack_dvec(nu[i], uref, &stage_cost_nls->y_ref, nx[i]);
+                blasfeo_pack_dvec(nx[i], xref, 1, &stage_cost_nls->y_ref, 0);
+                blasfeo_pack_dvec(nu[i], uref, 1, &stage_cost_nls->y_ref, nx[i]);
                 break;
 
-            case EXTERNALLY_PROVIDED:
+            case EXTERNAL:
 
-				ocp_nlp_cost_model_set(config, dims, nlp_in, i, "ext_cost_jac_hes", &external_cost[i]);
+				ocp_nlp_cost_model_set(config, dims, nlp_in, i, "ext_cost_fun_jac_hes", &external_cost[i]);
 
                 assert(i < NN && "externally provided cost not implemented for last stage!");
                 break;
@@ -1326,8 +1326,8 @@ void setup_and_solve_nlp(int NN,
     switch (con_type)
     {
         case BOX:
-            blasfeo_pack_dvec(nb[0], lb0, &constraints[0]->d, 0);
-            blasfeo_pack_dvec(nb[0], ub0, &constraints[0]->d, nb[0]+ng[0]);
+            blasfeo_pack_dvec(nb[0], lb0, 1, &constraints[0]->d, 0);
+            blasfeo_pack_dvec(nb[0], ub0, 1, &constraints[0]->d, nb[0]+ng[0]);
             constraints[0]->idxb = idxb0;
             break;
         case GENERAL:
@@ -1341,8 +1341,8 @@ void setup_and_solve_nlp(int NN,
 
             blasfeo_pack_tran_dmat(ng[0], nu[0], Cu0, ng[0], &constraints[0]->DCt, 0, 0);
             blasfeo_pack_tran_dmat(ng[0], nx[0], Cx0, ng[0], &constraints[0]->DCt, nu[0], 0);
-            blasfeo_pack_dvec(ng[0], lb0, &constraints[0]->d, nb[0]);
-            blasfeo_pack_dvec(ng[0], ub0, &constraints[0]->d, 2*nb[0]+ng[0]);
+            blasfeo_pack_dvec(ng[0], lb0, 1, &constraints[0]->d, nb[0]);
+            blasfeo_pack_dvec(ng[0], ub0, 1, &constraints[0]->d, 2*nb[0]+ng[0]);
 
             d_free(Cu0);
             d_free(Cx0);
@@ -1357,27 +1357,27 @@ void setup_and_solve_nlp(int NN,
                                                     nlp_in->constraints;
             nl_constr[0]->nl_constr_h_fun_jac = &nonlin_constr_generic;
 
-            blasfeo_pack_dvec(ng[0]+nh[0], lb0, &constraints[0]->d, nb[0]);
-            blasfeo_pack_dvec(ng[0]+nh[0], ub0, &constraints[0]->d, 2*nb[0]+ng[0]+nh[0]);
+            blasfeo_pack_dvec(ng[0]+nh[0], lb0, 1, &constraints[0]->d, nb[0]);
+            blasfeo_pack_dvec(ng[0]+nh[0], ub0, 1, &constraints[0]->d, 2*nb[0]+ng[0]+nh[0]);
             break;
     }
 
     // other stages
     for (int i = 1; i < NN; i++)
     {
-        blasfeo_pack_dvec(nb[i], lb1, &constraints[i]->d, 0);
-        blasfeo_pack_dvec(nb[i], ub1, &constraints[i]->d, nb[i]+ng[i]);
+        blasfeo_pack_dvec(nb[i], lb1, 1, &constraints[i]->d, 0);
+        blasfeo_pack_dvec(nb[i], ub1, 1, &constraints[i]->d, nb[i]+ng[i]);
         constraints[i]->idxb = idxb1;
     }
-    blasfeo_pack_dvec(nb[NN], lbN, &constraints[NN]->d, 0);
-    blasfeo_pack_dvec(nb[NN], ubN, &constraints[NN]->d, nb[NN]+ng[NN]);
+    blasfeo_pack_dvec(nb[NN], lbN, 1, &constraints[NN]->d, 0);
+    blasfeo_pack_dvec(nb[NN], ubN, 1, &constraints[NN]->d, nb[NN]+ng[NN]);
     constraints[NN]->idxb = idxbN;
 
     /************************************************
     * sqp opts
     ************************************************/
 
-    void *nlp_opts = ocp_nlp_opts_create(config, dims);
+    void *nlp_opts = ocp_nlp_solver_opts_create(config, dims);
     ocp_nlp_sqp_opts *sqp_opts = (ocp_nlp_sqp_opts *) nlp_opts;
 
     for (int i = 0; i < NN; ++i)
@@ -1385,7 +1385,7 @@ void setup_and_solve_nlp(int NN,
         if (plan->nlp_dynamics[i] == CONTINUOUS_MODEL)
         {
             ocp_nlp_dynamics_cont_opts *dynamics_stage_opts = (ocp_nlp_dynamics_cont_opts *)
-                                                              sqp_opts->dynamics[i];
+                                                              sqp_opts->nlp_opts->dynamics[i];
             sim_opts *sim_opts_ = (sim_opts *) dynamics_stage_opts->sim_solver;
 
             if (plan->sim_solver_plan[i].sim_solver == ERK)
@@ -1405,11 +1405,11 @@ void setup_and_solve_nlp(int NN,
     double tol_ineq = 1e-6;
     double tol_comp = 1e-6;
 
-    ocp_nlp_opts_set(config, nlp_opts, "max_iter", &max_iter);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "max_iter", &max_iter);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
 
     /************************************************
     * ocp_nlp out
@@ -1429,22 +1429,25 @@ void setup_and_solve_nlp(int NN,
     // solution
     for (int i=0; i <= NN; i++)
     {
-        blasfeo_pack_dvec(nu[i], uref, nlp_out->ux+i, 0);
-        blasfeo_pack_dvec(nx[i], xref, nlp_out->ux+i, nu[i]);
+        blasfeo_pack_dvec(nu[i], uref, 1, nlp_out->ux+i, 0);
+        blasfeo_pack_dvec(nx[i], xref, 1, nlp_out->ux+i, nu[i]);
     }
 
     // call nlp solver
     status = ocp_nlp_solve(solver, nlp_in, nlp_out);
 
     double max_res = 0.0;
-    double inf_norm_res_g = ((ocp_nlp_sqp_memory *)solver->mem)->nlp_res->inf_norm_res_g;
-    double inf_norm_res_b = ((ocp_nlp_sqp_memory *)solver->mem)->nlp_res->inf_norm_res_b;
-    double inf_norm_res_d = ((ocp_nlp_sqp_memory *)solver->mem)->nlp_res->inf_norm_res_d;
-    double inf_norm_res_m = ((ocp_nlp_sqp_memory *)solver->mem)->nlp_res->inf_norm_res_m;
-    max_res = (inf_norm_res_g > max_res) ? inf_norm_res_g : max_res;
-    max_res = (inf_norm_res_b > max_res) ? inf_norm_res_b : max_res;
-    max_res = (inf_norm_res_d > max_res) ? inf_norm_res_d : max_res;
-    max_res = (inf_norm_res_m > max_res) ? inf_norm_res_m : max_res;
+
+    double inf_norm_res_stat, inf_norm_res_eq, inf_norm_res_ineq, inf_norm_res_comp;
+    ocp_nlp_get(config, solver, "res_stat", &inf_norm_res_stat);
+    ocp_nlp_get(config, solver, "res_eq", &inf_norm_res_eq);
+    ocp_nlp_get(config, solver, "res_ineq", &inf_norm_res_ineq);
+    ocp_nlp_get(config, solver, "res_comp", &inf_norm_res_comp);
+
+    max_res = (inf_norm_res_stat > max_res) ? inf_norm_res_stat : max_res;
+    max_res = (inf_norm_res_eq > max_res) ? inf_norm_res_eq : max_res;
+    max_res = (inf_norm_res_ineq > max_res) ? inf_norm_res_ineq : max_res;
+    max_res = (inf_norm_res_comp > max_res) ? inf_norm_res_comp : max_res;
 
     std::cout << "max residuals: " << max_res << std::endl;
     REQUIRE(status == 0);
@@ -1474,7 +1477,7 @@ void setup_and_solve_nlp(int NN,
         free(erk4_casadi);
     }
 
-    ocp_nlp_opts_destroy(nlp_opts);
+    ocp_nlp_solver_opts_destroy(nlp_opts);
     ocp_nlp_in_destroy(nlp_in);
     ocp_nlp_out_destroy(nlp_out);
     ocp_nlp_solver_destroy(solver);
@@ -1500,7 +1503,7 @@ void setup_and_solve_nlp(int NN,
 			case NONLINEAR_LS:
 				external_function_casadi_free(&ls_cost_jac_casadi[i]);
 				break;
-			case EXTERNALLY_PROVIDED:
+			case EXTERNAL:
 				external_function_casadi_free(&external_cost[i]);
 			default:
 				break;

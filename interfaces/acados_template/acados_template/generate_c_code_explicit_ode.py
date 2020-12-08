@@ -31,22 +31,24 @@
 # POSSIBILITY OF SUCH DAMAGE.;
 #
 
-
-from casadi import *
 import os
+from casadi import *
+from .utils import ALLOWED_CASADI_VERSIONS, is_empty, casadi_version_warning
 
-def generate_c_code_explicit_ode( model ):
+def generate_c_code_explicit_ode( model, opts ):
 
     casadi_version = CasadiMeta.version()
     casadi_opts = dict(mex=False, casadi_int='int', casadi_real='double')
+    if casadi_version not in (ALLOWED_CASADI_VERSIONS):
+        casadi_version_warning(casadi_version)
 
-    if  casadi_version not in ('3.4.5', '3.4.0'):
-        # old casadi versions
-        raise Exception('Please download and install Casadi 3.4.0 to ensure compatibility with acados. Version ' + casadi_version + ' currently in use.')
+
+    generate_hess = opts["generate_hess"]
 
     # load model
     x = model.x
     u = model.u
+    p = model.p
     f_expl = model.f_expl_expr
     model_name = model.name
 
@@ -54,57 +56,44 @@ def generate_c_code_explicit_ode( model ):
     nx = x.size()[0]
     nu = u.size()[0]
 
-    ## set up functions to be exported
-    if isinstance(f_expl, casadi.SX):
-        Sx = SX.sym('Sx', nx, nx)
-        Sp = SX.sym('Sp', nx, nu)
-        lambdaX = SX.sym('lambdaX', nx, 1)
-    elif isinstance(f_expl, casadi.MX):
-        Sx = MX.sym('Sx', nx, nx)
-        Sp = MX.sym('Sp', nx, nu)
-        lambdaX = MX.sym('lambdaX', nx, 1)
+    if isinstance(f_expl, casadi.MX):
+        symbol = MX.sym
+    elif isinstance(f_expl, casadi.SX):
+        symbol = SX.sym
     else:
         raise Exception("Invalid type for f_expl! Possible types are 'SX' and 'MX'. Exiting.")
+    ## set up functions to be exported
+    Sx = symbol('Sx', nx, nx)
+    Sp = symbol('Sp', nx, nu)
+    lambdaX = symbol('lambdaX', nx, 1)
 
     fun_name = model_name + '_expl_ode_fun'
-    expl_ode_fun = Function(fun_name, [x,u], [f_expl])
-    # TODO: Polish: get rid of SX.zeros
-    if isinstance(f_expl, casadi.SX):
-        vdeX = SX.zeros(nx,nx)
-    else: 
-        vdeX = MX.zeros(nx,nx)
 
-    vdeX = vdeX + jtimes(f_expl,x,Sx)
+    ## Set up functions
+    expl_ode_fun = Function(fun_name, [x, u, p], [f_expl])
 
-    if isinstance(f_expl, casadi.SX):
-        vdeP = SX.zeros(nx,nu) + jacobian(f_expl,u)
-    else: 
-        vdeP = MX.zeros(nx,nu) + jacobian(f_expl,u)
-
-    vdeP = vdeP + jtimes(f_expl,x,Sp)
+    vdeX = jtimes(f_expl,x,Sx)
+    vdeP = jacobian(f_expl,u) + jtimes(f_expl,x,Sp)
 
     fun_name = model_name + '_expl_vde_forw'
-    expl_vde_forw = Function(fun_name, [x,Sx,Sp,u], [f_expl,vdeX,vdeP])
 
-    if isinstance(f_expl, casadi.SX):
-        jacX = SX.zeros(nx,nx) + jacobian(f_expl,x)
-    else: 
-        jacX = MX.zeros(nx,nx) + jacobian(f_expl,x)
+    expl_vde_forw = Function(fun_name, [x, Sx, Sp, u, p], [f_expl, vdeX, vdeP])
 
     adj = jtimes(f_expl, vertcat(x, u), lambdaX, True)
 
     fun_name = model_name + '_expl_vde_adj'
-    expl_vde_adj = Function(fun_name, [x,lambdaX,u], [adj])
+    expl_vde_adj = Function(fun_name, [x, lambdaX, u, p], [adj])
 
-    S_forw = vertcat(horzcat(Sx, Sp), horzcat(DM.zeros(nu,nx), DM.eye(nu)))
-    hess = mtimes(transpose(S_forw),jtimes(adj, vertcat(x,u), S_forw))
-    hess2 = []
-    for j in range(nx+nu):
-        for i in range(j,nx+nu):
-            hess2 = vertcat(hess2, hess[i,j])
+    if generate_hess:
+        S_forw = vertcat(horzcat(Sx, Sp), horzcat(DM.zeros(nu,nx), DM.eye(nu)))
+        hess = mtimes(transpose(S_forw),jtimes(adj, vertcat(x,u), S_forw))
+        hess2 = []
+        for j in range(nx+nu):
+            for i in range(j,nx+nu):
+                hess2 = vertcat(hess2, hess[i,j])
 
-    fun_name = model_name + '_expl_ode_hess'
-    expl_ode_hess = Function(fun_name, [x, Sx, Sp, lambdaX, u], [adj, hess2])
+        fun_name = model_name + '_expl_ode_hess'
+        expl_ode_hess = Function(fun_name, [x, Sx, Sp, lambdaX, u, p], [adj, hess2])
 
     ## generate C code
     if not os.path.exists('c_generated_code'):
@@ -121,12 +110,13 @@ def generate_c_code_explicit_ode( model ):
 
     fun_name = model_name + '_expl_vde_forw'
     expl_vde_forw.generate(fun_name, casadi_opts)
-    
+
     fun_name = model_name + '_expl_vde_adj'
     expl_vde_adj.generate(fun_name, casadi_opts)
-    
-    fun_name = model_name + '_expl_ode_hess'
-    expl_ode_hess.generate(fun_name, casadi_opts)
+
+    if generate_hess:
+        fun_name = model_name + '_expl_ode_hess'
+        expl_ode_hess.generate(fun_name, casadi_opts)
     os.chdir('../..')
 
     return

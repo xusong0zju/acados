@@ -34,6 +34,14 @@
 
 #include <assert.h>
 
+// acados
+#include "acados/ocp_qp/ocp_qp_common.h"
+#include "acados/ocp_qp/ocp_qp_osqp.h"
+#include "acados/utils/mem.h"
+#include "acados/utils/print.h"
+#include "acados/utils/timing.h"
+#include "acados/utils/types.h"
+
 // osqp
 #include "osqp/include/auxil.h"
 #include "osqp/include/constants.h"
@@ -43,14 +51,6 @@
 #include "osqp/include/types.h"
 #include "osqp/include/util.h"
 #include "osqp/include/lin_sys.h"
-
-// acados
-#include "acados/ocp_qp/ocp_qp_common.h"
-#include "acados/ocp_qp/ocp_qp_osqp.h"
-#include "acados/utils/mem.h"
-#include "acados/utils/print.h"
-#include "acados/utils/timing.h"
-#include "acados/utils/types.h"
 
 
 
@@ -297,7 +297,7 @@ static void update_gradient(const ocp_qp_in *in, ocp_qp_osqp_memory *mem)
 
     for (kk = 0; kk <= dims->N; kk++)
     {
-        blasfeo_unpack_dvec(dims->nu[kk] + dims->nx[kk], in->rqz + kk, 0, &mem->q[nn]);
+        blasfeo_unpack_dvec(dims->nu[kk] + dims->nx[kk], in->rqz + kk, 0, &mem->q[nn], 1);
         nn += dims->nu[kk] + dims->nx[kk];
     }
 }
@@ -538,7 +538,7 @@ static void update_bounds(const ocp_qp_in *in, ocp_qp_osqp_memory *mem)
     for (kk = 0; kk < dims->N; kk++)
     {
         // unpack b to l
-        blasfeo_unpack_dvec(dims->nx[kk + 1], in->b + kk, 0, &mem->l[nn]);
+        blasfeo_unpack_dvec(dims->nx[kk + 1], in->b + kk, 0, &mem->l[nn], 1);
 
         // change sign of l (to get -b) and copy to u
         for (ii = 0; ii < dims->nx[kk + 1]; ii++)
@@ -554,7 +554,7 @@ static void update_bounds(const ocp_qp_in *in, ocp_qp_osqp_memory *mem)
     for (kk = 0; kk <= dims->N; kk++)
     {
         // unpack lg to l
-        blasfeo_unpack_dvec(dims->ng[kk], in->d + kk, dims->nb[kk], &mem->l[nn]);
+        blasfeo_unpack_dvec(dims->ng[kk], in->d + kk, dims->nb[kk], &mem->l[nn], 1);
 
         // unpack ug to u and flip signs because in HPIPM the signs are flipped for upper bounds
         for (ii = 0; ii < dims->ng[kk]; ii++)
@@ -569,7 +569,7 @@ static void update_bounds(const ocp_qp_in *in, ocp_qp_osqp_memory *mem)
     for (kk = 0; kk <= dims->N; kk++)
     {
         // unpack lb to l
-        blasfeo_unpack_dvec(dims->nb[kk], in->d + kk, 0, &mem->l[nn]);
+        blasfeo_unpack_dvec(dims->nb[kk], in->d + kk, 0, &mem->l[nn], 1);
 
         // unpack ub to u and flip signs because in HPIPM the signs are flipped for upper bounds
         for (ii = 0; ii < dims->nb[kk]; ii++)
@@ -626,9 +626,6 @@ void *ocp_qp_osqp_opts_assign(void *config_, void *dims_, void *raw_memory)
     opts->osqp_opts = (OSQPSettings *) c_ptr;
     c_ptr += sizeof(OSQPSettings);
 
-    opts->verbose = 0;  // default value, disable printing
-    opts->polish = 1; // default value, enable polishing
-
     assert((char *) raw_memory + ocp_qp_osqp_opts_calculate_size(config_, dims_) == c_ptr);
 
     return (void *) opts;
@@ -641,8 +638,10 @@ void ocp_qp_osqp_opts_initialize_default(void *config_, void *dims_, void *opts_
     ocp_qp_osqp_opts *opts = opts_;
 
     osqp_set_default_settings(opts->osqp_opts);
-    opts->osqp_opts->verbose = opts->verbose;
-    opts->osqp_opts->polish = opts->polish;
+    opts->osqp_opts->verbose = 0;
+    opts->osqp_opts->polish = 1;
+    opts->osqp_opts->check_termination = 5;
+    opts->osqp_opts->warm_start = 1;
 
     return;
 }
@@ -660,33 +659,61 @@ void ocp_qp_osqp_opts_set(void *config_, void *opts_, const char *field, void *v
 {
     ocp_qp_osqp_opts *opts = opts_;
 
-    if (!strcmp(field, "tol_stat"))
+    // NOTE/TODO(oj): options are copied into OSQP at first call.
+    // Updating options through this function does not work, only before the first call!
+    if (!strcmp(field, "iter_max"))
     {
-		// TODO set solver exit tolerance
+        int *tmp_ptr = value;
+        opts->osqp_opts->max_iter = *tmp_ptr;
+    }
+    else if (!strcmp(field, "tol_stat"))
+    {
+        double *tol = value;
+        // printf("in ocp_qp_osqp_opts_set, tol_stat %e\n", *tol);
+
+        // opts->osqp_opts->eps_rel = *tol;
+        // opts->osqp_opts->eps_dual_inf = *tol;
+
+        opts->osqp_opts->eps_rel = fmax(*tol, 1e-5);
+        opts->osqp_opts->eps_dual_inf = fmax(*tol, 1e-5);
+
+        if (*tol <= 1e-3)
+        {
+            opts->osqp_opts->polish = 1;
+            opts->osqp_opts->polish_refine_iter = 5;
+        }
     }
     else if (!strcmp(field, "tol_eq"))
     {
-		// TODO set solver exit tolerance
+        double *tol = value;
+        opts->osqp_opts->eps_prim_inf = *tol;
     }
     else if (!strcmp(field, "tol_ineq"))
     {
-		// TODO set solver exit tolerance
+        double *tol = value;
+        opts->osqp_opts->eps_prim_inf = *tol;
     }
     else if (!strcmp(field, "tol_comp"))
     {
-		// TODO set solver exit tolerance
+        // "OSQP always satisfies complementary slackness conditions
+        //  with machine precision by construction." - Strellato2020
     }
     else if (!strcmp(field, "warm_start"))
     {
-		// TODO set solver warm start
+        // XXX after the first call to the solver, this doesn't work any more, as in osqp the settings are copied in the work !!!!!
+        // XXX i.e. as it is, it gets permanently set to zero if warm start is disabled at the fist iteration !!!!!
+        int *tmp_ptr = value;
+        // int tmp_ptr[] = {1};
+        opts->osqp_opts->warm_start = *tmp_ptr;
+        // printf("\nwarm start %d\n", opts->osqp_opts->warm_start);
     }
-	else
-	{
-		printf("\nerror: ocp_qp_osqp_opts_set: wrong field: %s\n", field);
-		exit(1);
-	}
+    else
+    {
+        printf("\nerror: ocp_qp_osqp_opts_set: wrong field: %s\n", field);
+        exit(1);
+    }
 
-	return;
+    return;
 }
 
 
@@ -766,6 +793,7 @@ static int osqp_workspace_calculate_size(int n, int m, int P_nnzmax, int A_nnzma
 
     return size;
 }
+
 
 int ocp_qp_osqp_memory_calculate_size(void *config_, void *dims_, void *opts_)
 {
@@ -1165,11 +1193,45 @@ void *ocp_qp_osqp_memory_assign(void *config_, void *dims_, void *opts_, void *r
     return mem;
 }
 
+
+
+void ocp_qp_osqp_memory_get(void *config_, void *mem_, const char *field, void* value)
+{
+    qp_solver_config *config = config_;
+    ocp_qp_osqp_memory *mem = mem_;
+
+    if(!strcmp(field, "time_qp_solver_call"))
+    {
+        double *tmp_ptr = value;
+        *tmp_ptr = mem->time_qp_solver_call;
+    }
+    else if(!strcmp(field, "iter"))
+    {
+        int *tmp_ptr = value;
+        *tmp_ptr = mem->iter;
+    }
+    else
+    {
+        printf("\nerror: ocp_qp_osqp_memory_get: field %s not available\n", field);
+        exit(1);
+    }
+
+    return;
+
+}
+
+
+
 /************************************************
  * workspace
  ************************************************/
 
-int ocp_qp_osqp_workspace_calculate_size(void *config_, void *dims_, void *opts_) { return 0; }
+int ocp_qp_osqp_workspace_calculate_size(void *config_, void *dims_, void *opts_)
+{
+    return 0;
+}
+
+
 
 /************************************************
  * functions
@@ -1183,7 +1245,7 @@ static void fill_in_qp_out(const ocp_qp_in *in, ocp_qp_out *out, ocp_qp_osqp_mem
 
     for (kk = 0; kk <= dims->N; kk++)
     {
-        blasfeo_pack_dvec(dims->nx[kk] + dims->nu[kk], &sol->x[nn], out->ux + kk, 0);
+        blasfeo_pack_dvec(dims->nx[kk] + dims->nu[kk], &sol->x[nn], 1, out->ux + kk, 0);
         nn += dims->nx[kk] + dims->nu[kk];
 
         con_start += kk < dims->N ? dims->nx[kk + 1] : 0;
@@ -1195,7 +1257,7 @@ static void fill_in_qp_out(const ocp_qp_in *in, ocp_qp_out *out, ocp_qp_osqp_mem
     nn = 0;
     for (kk = 0; kk < dims->N; kk++)
     {
-        blasfeo_pack_dvec(dims->nx[kk + 1], &sol->y[nn], out->pi + kk, 0);
+        blasfeo_pack_dvec(dims->nx[kk + 1], &sol->y[nn], 1, out->pi + kk, 0);
         nn += dims->nx[kk + 1];
     }
 
@@ -1254,9 +1316,9 @@ int ocp_qp_osqp(void *config_, void *qp_in_, void *qp_out_, void *opts_, void *m
     // print_ocp_qp_in(qp_in);
 
     qp_info *info = (qp_info *) qp_out->misc;
-    acados_timer tot_timer, qp_timer, interface_timer;
-
+    acados_timer tot_timer, qp_timer, interface_timer, solver_call_timer;
     acados_tic(&tot_timer);
+
     // cast data structures
     ocp_qp_osqp_opts *opts = (ocp_qp_osqp_opts *) opts_;
     ocp_qp_osqp_memory *mem = (ocp_qp_osqp_memory *) mem_;
@@ -1274,6 +1336,7 @@ int ocp_qp_osqp(void *config_, void *qp_in_, void *qp_out_, void *opts_, void *m
         osqp_update_P_A(mem->osqp_work, mem->P_x, NULL, mem->P_nnzmax, mem->A_x, NULL,
                         mem->A_nnzmax);
         osqp_update_bounds(mem->osqp_work, mem->l, mem->u);
+        // TODO(oj): update OSQP options here if they were updated?
     }
     else
     {
@@ -1282,11 +1345,23 @@ int ocp_qp_osqp(void *config_, void *qp_in_, void *qp_out_, void *opts_, void *m
         mem->first_run = 0;
     }
 
+    // check settings:
+    // OSQPSettings *settings = mem->osqp_work->settings;
+    // printf("OSQP settings: warm_start %d\n", settings->warm_start);
+    // printf("polish %d, polish_refine_iter %d, delta: %e\n", settings->polish, settings->polish_refine_iter, settings->delta);
+    // printf("eps_abs %e, eps_rel %e, eps_prim_inf: %e, eps_dual_inf: %e\n", settings->eps_abs, settings->eps_rel, settings->eps_prim_inf, settings->eps_dual_inf);
+
     // solve OSQP
+    acados_tic(&solver_call_timer);
     osqp_solve(mem->osqp_work);
+    mem->time_qp_solver_call = acados_toc(&solver_call_timer);
+    mem->iter = mem->osqp_work->info->iter;
+
+    // fill qp_out
     fill_in_qp_out(qp_in, qp_out, mem);
     ocp_qp_compute_t(qp_in, qp_out);
 
+    // info
     info->solve_QP_time = acados_toc(&qp_timer);
     info->total_time = acados_toc(&tot_timer);
     info->num_iter = mem->osqp_work->info->iter;
@@ -1305,8 +1380,8 @@ int ocp_qp_osqp(void *config_, void *qp_in_, void *qp_out_, void *opts_, void *m
 
 void ocp_qp_osqp_eval_sens(void *config_, void *qp_in, void *qp_out, void *opts_, void *mem_, void *work_)
 {
-	printf("\nerror: ocp_qp_osqp_eval_sens: not implemented yet\n");
-	exit(1);
+    printf("\nerror: ocp_qp_osqp_eval_sens: not implemented yet\n");
+    exit(1);
 }
 
 
@@ -1322,6 +1397,7 @@ void ocp_qp_osqp_config_initialize_default(void *config_)
     config->opts_set = &ocp_qp_osqp_opts_set;
     config->memory_calculate_size = &ocp_qp_osqp_memory_calculate_size;
     config->memory_assign = &ocp_qp_osqp_memory_assign;
+    config->memory_get = &ocp_qp_osqp_memory_get;
     config->workspace_calculate_size = &ocp_qp_osqp_workspace_calculate_size;
     config->evaluate = &ocp_qp_osqp;
     config->eval_sens = &ocp_qp_osqp_eval_sens;

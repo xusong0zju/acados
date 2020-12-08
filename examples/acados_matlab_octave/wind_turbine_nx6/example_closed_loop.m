@@ -44,8 +44,11 @@ if (~strcmp(env_run, 'true'))
 end
 
 
+% get references
+compute_setup;
+
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 % simulation
 sim_method = 'irk';
@@ -53,7 +56,6 @@ sim_sens_forw = 'false';
 sim_num_stages = 4;
 sim_num_steps = 1;
 % ocp
-ocp_param_scheme = 'multiple_shooting_unif_grid';
 ocp_N = 40;
 ocp_nlp_solver = 'sqp';
 %ocp_nlp_solver = 'sqp_rti';
@@ -75,13 +77,13 @@ ocp_qp_solver = 'partial_condensing_hpipm';
 ocp_qp_solver_cond_N = 5;
 ocp_qp_solver_cond_ric_alg = 0;
 ocp_qp_solver_ric_alg = 0;
-ocp_qp_solver_warm_start = 2;
+ocp_qp_solver_warm_start = 0;
 %ocp_sim_method = 'erk';
 ocp_sim_method = 'irk';
 ocp_sim_method_num_stages = 4;
 ocp_sim_method_num_steps = 1;
-%cost_type = 'linear_ls';
-cost_type = 'nonlinear_ls';
+cost_type = 'linear_ls';
+%cost_type = 'nonlinear_ls';
 
 
 
@@ -200,22 +202,7 @@ u_end = zeros(nu, 1);
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
-%% dims
-ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-ocp_model.set('dim_ny', ny);
-ocp_model.set('dim_ny_e', ny_e);
-ocp_model.set('dim_nbx', nbx);
-ocp_model.set('dim_nbu', nbu);
-ocp_model.set('dim_nh', nh);
-ocp_model.set('dim_nh_e', nh_e);
-ocp_model.set('dim_ns', ns);
-ocp_model.set('dim_ns_e', ns_e);
-ocp_model.set('dim_nsbx', nsbx);
-ocp_model.set('dim_nsh', nsh);
-ocp_model.set('dim_nsh_e', nsh_e);
-ocp_model.set('dim_np', np);
+
 %% symbolics
 ocp_model.set('sym_x', model.sym_x);
 ocp_model.set('sym_u', model.sym_u);
@@ -251,6 +238,9 @@ end
 ocp_model.set('constr_Jbx', Jbx);
 ocp_model.set('constr_lbx', lbx);
 ocp_model.set('constr_ubx', ubx);
+ocp_model.set('constr_Jbx_e', Jbx);
+ocp_model.set('constr_lbx_e', lbx);
+ocp_model.set('constr_ubx_e', ubx);
 % input bounds
 ocp_model.set('constr_Jbu', Jbu);
 ocp_model.set('constr_lbu', lbu);
@@ -264,8 +254,12 @@ ocp_model.set('constr_lh_e', lh_e);
 ocp_model.set('constr_uh_e', uh_e);
 % soft nonlinear constraints
 ocp_model.set('constr_Jsbx', Jsbx);
+ocp_model.set('constr_Jsbx_e', Jsbx);
 ocp_model.set('constr_Jsh', Jsh);
 ocp_model.set('constr_Jsh_e', Jsh_e);
+
+ocp_model.set('constr_x0', x0_ref);
+
 
 ocp_model.model_struct
 
@@ -273,9 +267,8 @@ ocp_model.model_struct
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', ocp_param_scheme);
 ocp_opts.set('param_scheme_N', ocp_N);
 ocp_opts.set('nlp_solver', ocp_nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', ocp_nlp_solver_exact_hessian);
@@ -283,10 +276,10 @@ ocp_opts.set('regularize_method', regularize_method);
 ocp_opts.set('nlp_solver_ext_qp_res', ocp_nlp_solver_ext_qp_res);
 if (strcmp(ocp_nlp_solver, 'sqp'))
     ocp_opts.set('nlp_solver_max_iter', ocp_nlp_solver_max_iter);
-    ocp_opts.set('nlp_solver_tol_stat', ocp_nlp_solver_tol_stat);
-    ocp_opts.set('nlp_solver_tol_eq', ocp_nlp_solver_tol_eq);
-    ocp_opts.set('nlp_solver_tol_ineq', ocp_nlp_solver_tol_ineq);
-    ocp_opts.set('nlp_solver_tol_comp', ocp_nlp_solver_tol_comp);
+%    ocp_opts.set('nlp_solver_tol_stat', ocp_nlp_solver_tol_stat);
+%    ocp_opts.set('nlp_solver_tol_eq', ocp_nlp_solver_tol_eq);
+%    ocp_opts.set('nlp_solver_tol_ineq', ocp_nlp_solver_tol_ineq);
+%    ocp_opts.set('nlp_solver_tol_comp', ocp_nlp_solver_tol_comp);
 end
 ocp_opts.set('qp_solver', ocp_qp_solver);
 if (strcmp(ocp_qp_solver, 'partial_condensing_hpipm'))
@@ -314,10 +307,6 @@ ocp = acados_ocp(ocp_model, ocp_opts);
 
 %% acados sim model
 sim_model = acados_sim_model();
-% dims
-sim_model.set('dim_nx', nx);
-sim_model.set('dim_nu', nu);
-sim_model.set('dim_np', np);
 % symbolics
 sim_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -343,7 +332,7 @@ end
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', sim_num_stages);
 sim_opts.set('num_steps', sim_num_steps);
@@ -361,9 +350,6 @@ sim = acados_sim(sim_model, sim_opts);
 
 
 %% closed loop simulation
-% get references
-compute_setup;
-
 n_sim = 100;
 n_sim_max = length(wind0_ref) - ocp_N;
 if n_sim>n_sim_max
@@ -412,6 +398,8 @@ for ii=1:n_sim
     u = ocp.get('u');
     pi = ocp.get('pi');
 
+%ocp.print('stat');
+%return
     % store first input
     u_sim(:,ii) = ocp.get('u', 0);
 
@@ -466,39 +454,11 @@ for ii=1:n_sim
 
     sqp_iter_sim(ii) = sqp_iter;
 
-    fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms]), Pel = %f\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, electrical_power);
+    fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms]), Pel = %f\n',...
+             status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, electrical_power);
 
     if 0
-        stat = ocp.get('stat');
-        if (strcmp(ocp_nlp_solver, 'sqp'))
-            fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-            if size(stat,2)>7
-                fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-            end
-            fprintf('\n');
-            for ii=1:size(stat,1)
-                fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3), stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-                if size(stat,2)>7
-                    fprintf('\t%e\t%e\t%e\t%e', stat(ii,8), stat(ii,9), stat(ii,10), stat(ii,11));
-                end
-                fprintf('\n');
-            end
-            fprintf('\n');
-        else % sqp_rti
-            fprintf('\niter\tqp_stat\tqp_iter');
-            if size(stat,2)>3
-                fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-            end
-            fprintf('\n');
-            for ii=1:size(stat,1)
-                fprintf('%d\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3));
-                if size(stat,2)>3
-                    fprintf('\t%e\t%e\t%e\t%e', stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-                end
-                fprintf('\n');
-            end
-            fprintf('\n');
-        end
+        ocp.print('stat')
     end
 
 end
@@ -546,8 +506,3 @@ if 1
         waitforbuttonpress;
     end
 end
-
-
-
-return;
-

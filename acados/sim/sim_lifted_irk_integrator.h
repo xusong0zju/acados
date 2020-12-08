@@ -97,6 +97,10 @@ typedef struct
 
     int update_sens;
 
+	double time_sim;
+	double time_ad;
+	double time_la;
+
 } sim_lifted_irk_memory;
 
 
@@ -127,7 +131,7 @@ void sim_lifted_irk_opts_initialize_default(void *config, void *dims, void *opts
 //
 void sim_lifted_irk_opts_update(void *config_, void *dims, void *opts_);
 //
-int sim_lifted_irk_opts_set(void *config_, void *opts_, const char *field, void *value);
+void sim_lifted_irk_opts_set(void *config_, void *opts_, const char *field, void *value);
 
 /* memory */
 //

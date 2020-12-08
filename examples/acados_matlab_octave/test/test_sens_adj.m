@@ -38,7 +38,7 @@ addpath('../pendulum_on_cart_model/');
 
 for integrator = {'irk_gnsf', 'irk', 'erk'}
     %% arguments
-    compile_mex = 'true';
+    compile_interface = 'auto';
     codgen_model = 'true';
     method = integrator{1}; %'irk'; 'irk_gnsf'; 'erk';
     sens_forw = 'false';
@@ -70,9 +70,6 @@ for integrator = {'irk_gnsf', 'irk', 'erk'}
     if isfield(model, 'sym_p')
         sim_model.set('sym_p', model.sym_p);
     end
-    sim_model.set('dim_nx', model.nx);
-    sim_model.set('dim_nu', model.nu);
-
 
     if (strcmp(method, 'erk'))
         sim_model.set('dyn_type', 'explicit');
@@ -81,15 +78,11 @@ for integrator = {'irk_gnsf', 'irk', 'erk'}
         sim_model.set('dyn_type', 'implicit');
         sim_model.set('dyn_expr_f', model.expr_f_impl);
         sim_model.set('sym_xdot', model.sym_xdot);
-    %	if isfield(model, 'sym_z')
-    %		sim_model.set('sym_z', model.sym_z);
-    %	end
-    %	sim_model.set('dim_nz', model.nz);
     end
 
 	%% acados sim opts
 	sim_opts = acados_sim_opts();
-	sim_opts.set('compile_mex', compile_mex);
+	sim_opts.set('compile_interface', compile_interface);
 	sim_opts.set('codgen_model', codgen_model);
 	sim_opts.set('num_stages', num_stages);
 	sim_opts.set('num_steps', num_steps);

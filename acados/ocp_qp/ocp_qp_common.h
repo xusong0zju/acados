@@ -61,7 +61,6 @@ typedef struct d_ocp_qp_res_ws ocp_qp_res_ws;
 #define QP_SOLVER_CONFIG_
 typedef struct
 {
-    // TODO(dimitris): pass dims to evaluate?
     void (*dims_set)(void *config_, void *dims_, int stage, const char *field, int* value);
     int (*opts_calculate_size)(void *config, void *dims);
     void *(*opts_assign)(void *config, void *dims, void *raw_memory);
@@ -70,6 +69,7 @@ typedef struct
     void (*opts_set)(void *config_, void *opts_, const char *field, void* value);
     int (*memory_calculate_size)(void *config, void *dims, void *opts);
     void *(*memory_assign)(void *config, void *dims, void *opts, void *raw_memory);
+    void (*memory_get)(void *config_, void *mem_, const char *field, void* value);
     int (*workspace_calculate_size)(void *config, void *dims, void *opts);
     int (*evaluate)(void *config, void *qp_in, void *qp_out, void *opts, void *mem, void *work);
     void (*eval_sens)(void *config, void *qp_in, void *qp_out, void *opts, void *mem, void *work);
@@ -84,7 +84,7 @@ typedef struct
     void *(*dims_assign)(void *config, int N, void *raw_memory);
     void (*dims_set)(void *config, void *dims_, int stage, const char *field, int* value);
     void (*dims_get)(void *config, void *dims, const char *field, void* value);
-	// TODO add config everywhere !!!!!
+    // TODO add config everywhere !!!!!
     int (*opts_calculate_size)(void *dims);
     void *(*opts_assign)(void *dims, void *raw_memory);
     void (*opts_initialize_default)(void *dims, void *opts);
@@ -135,6 +135,8 @@ int ocp_qp_dims_calculate_size(int N);
 ocp_qp_dims *ocp_qp_dims_assign(int N, void *raw_memory);
 //
 void ocp_qp_dims_set(void *config_, void *dims, int stage, const char *field, int* value);
+//
+void ocp_qp_dims_get(void *config_, void *dims, int stage, const char *field, int* value);
 
 
 /* in */
@@ -149,9 +151,6 @@ ocp_qp_in *ocp_qp_in_assign(ocp_qp_dims *dims, void *raw_memory);
 int ocp_qp_out_calculate_size(ocp_qp_dims *dims);
 //
 ocp_qp_out *ocp_qp_out_assign(ocp_qp_dims *dims, void *raw_memory);
-//
-void ocp_qp_out_get(ocp_qp_out *out, const char *field, void *value);
-
 
 /* res */
 //

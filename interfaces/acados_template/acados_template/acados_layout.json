@@ -2,22 +2,30 @@
     "acados_include_path": [
         "str"
     ],
+    "model": {
+         "name" : [
+            "str"
+        ]
+    },
+    "parameter_values": [
+        "ndarray",
+        [
+            "np"
+        ]
+    ],
     "acados_lib_path": [
         "str"
     ],
-    "con_h_e_name": [
-        "NoneType"
-    ],
-    "con_h_name": [
-        "NoneType"
-    ],
-    "con_p_e_name": [
-        "NoneType"
-    ],
-    "con_p_name": [
-        "NoneType"
+    "problem_class": [
+        "str"
     ],
     "constraints": {
+        "constr_type": [
+            "str"
+        ],
+        "constr_type_e": [
+            "str"
+        ],
         "lbx": [
             "ndarray",
                 [
@@ -68,98 +76,32 @@
         ],
         "idxbx_e": [
             "ndarray",
-                    [
-                        "nbx_e"
-                    ]
-        ],
-        "lsbx": [
-            "ndarray",
-                [
-                    "nsbx"
-                ]
-        ],
-        "lsbu": [
-            "ndarray",
             [
-                "nsbu"
+                "nbx_e"
             ]
         ],
-        "usbx": [
-            "ndarray",
-                [
-                    "nsbx"
-                ]
-        ],
-        "usbu": [
+        "lbx_0": [
             "ndarray",
             [
-                "nsbu"
+                "nbx_0"
             ]
         ],
-        "lsh": [
+        "ubx_0": [
             "ndarray",
             [
-                "nsh"
+                "nbx_0"
             ]
         ],
-        "ush": [
+        "idxbx_0": [
             "ndarray",
             [
-                "nsh"
+                "nbx_0"
             ]
         ],
-        "idxsbx": [
-            "ndarray",
-                [
-                    "nsbx"
-                ]
-        ],
-        "idxsbu": [
+        "idxbxe_0": [
             "ndarray",
             [
-                "nsbu"
-            ]
-        ],
-        "idxsh": [
-            "ndarray",
-            [
-                "nsh"
-            ]
-        ],
-        "lsbx_e": [
-            "ndarray",
-                [
-                    "nsbx_e"
-                ]
-        ],
-        "usbx_e": [
-            "ndarray",
-                [
-                    "nsbx_e"
-                ]
-        ],
-        "idxsbx_e": [
-            "ndarray",
-                [
-                    "nsbx_e"
-                ]
-        ],
-        "lsh_e": [
-            "ndarray",
-            [
-                "nsh_e"
-            ]
-        ],
-        "ush_e": [
-            "ndarray",
-            [
-                "nsh_e"
-            ]
-        ],
-        "idxsh_e": [
-            "ndarray",
-            [
-                "nsh_e"
+                "nbxe_0"
             ]
         ],
         "lg": [
@@ -231,20 +173,200 @@
                 "nh_e"
             ]
         ],
-        "p": [
+        "lphi": [
             "ndarray",
             [
-                "np"
+                "nphi"
             ]
         ],
-        "x0": [
+        "uphi": [
             "ndarray",
             [
-                "nx"
+                "nphi"
+            ]
+        ],
+        "lphi_e": [
+            "ndarray",
+            [
+                "nphi_e"
+            ]
+        ],
+        "uphi_e": [
+            "ndarray",
+            [
+                "nphi_e"
+            ]
+        ],
+        "lsbx": [
+            "ndarray",
+                [
+                    "nsbx"
+                ]
+        ],
+        "usbx": [
+            "ndarray",
+                [
+                    "nsbx"
+                ]
+        ],
+        "lsbu": [
+            "ndarray",
+            [
+                "nsbu"
+            ]
+        ],
+        "usbu": [
+            "ndarray",
+            [
+                "nsbu"
+            ]
+        ],
+        "idxsbx": [
+            "ndarray",
+                [
+                    "nsbx"
+                ]
+        ],
+        "idxsbu": [
+            "ndarray",
+            [
+                "nsbu"
+            ]
+        ],
+        "lsbx_e": [
+            "ndarray",
+                [
+                    "nsbx_e"
+                ]
+        ],
+        "usbx_e": [
+            "ndarray",
+                [
+                    "nsbx_e"
+                ]
+        ],
+        "idxsbx_e": [
+            "ndarray",
+                [
+                    "nsbx_e"
+                ]
+        ],
+        "lsg": [
+            "ndarray",
+            [
+                "nsg"
+            ]
+        ],
+        "usg": [
+            "ndarray",
+            [
+                "nsg"
+            ]
+        ],
+        "idxsg": [
+            "ndarray",
+            [
+                "nsg"
+            ]
+        ],
+        "lsg_e": [
+            "ndarray",
+            [
+                "nsg_e"
+            ]
+        ],
+        "usg_e": [
+            "ndarray",
+            [
+                "nsg_e"
+            ]
+        ],
+        "idxsg_e": [
+            "ndarray",
+            [
+                "nsg_e"
+            ]
+        ],
+        "lsh": [
+            "ndarray",
+            [
+                "nsh"
+            ]
+        ],
+        "ush": [
+            "ndarray",
+            [
+                "nsh"
+            ]
+        ],
+        "idxsh": [
+            "ndarray",
+            [
+                "nsh"
+            ]
+        ],
+        "lsh_e": [
+            "ndarray",
+            [
+                "nsh_e"
+            ]
+        ],
+        "ush_e": [
+            "ndarray",
+            [
+                "nsh_e"
+            ]
+        ],
+        "idxsh_e": [
+            "ndarray",
+            [
+                "nsh_e"
+            ]
+        ],
+        "lsphi": [
+            "ndarray",
+            [
+                "nsphi"
+            ]
+        ],
+        "usphi": [
+            "ndarray",
+            [
+                "nsphi"
+            ]
+        ],
+        "idxsphi": [
+            "ndarray",
+            [
+                "nsphi"
+            ]
+        ],
+        "lsphi_e": [
+            "ndarray",
+            [
+                "nsphi_e"
+            ]
+        ],
+        "usphi_e": [
+            "ndarray",
+            [
+                "nsphi_e"
+            ]
+        ],
+        "idxsphi_e": [
+            "ndarray",
+            [
+                "nsphi_e"
             ]
         ]
     },
     "cost": {
+        "cost_type": [
+            "str"
+        ],
+        "cost_type_e": [
+            "str"
+        ],
         "Vu": [
             "ndarray",
             [
@@ -283,14 +405,12 @@
         "Zl": [
             "ndarray",
             [
-                "ns",
                 "ns"
             ]
         ],
         "Zu": [
             "ndarray",
             [
-                "ns",
                 "ns"
             ]
         ],
@@ -328,14 +448,12 @@
         "Zl_e": [
             "ndarray",
             [
-                "ns_e",
                 "ns_e"
             ]
         ],
         "Zu_e": [
             "ndarray",
             [
-                "ns_e",
                 "ns_e"
             ]
         ],
@@ -371,13 +489,31 @@
         "nsbx_e": [
             "int"
         ],
+        "nbx_0": [
+            "int"
+        ],
         "nbx_e": [
+            "int"
+        ],
+        "nbxe_0": [
+            "int"
+        ],
+        "nsg": [
+            "int"
+        ],
+        "nsg_e": [
             "int"
         ],
         "nsh": [
             "int"
         ],
         "nsh_e": [
+            "int"
+        ],
+        "nsphi": [
+            "int"
+        ],
+        "nsphi_e": [
             "int"
         ],
         "ns": [
@@ -392,19 +528,25 @@
         "ng_e": [
             "int"
         ],
+        "np": [
+            "int"
+        ],
+        "nr": [
+            "int"
+        ],
+        "nr_e": [
+            "int"
+        ],
         "nh": [
             "int"
         ],
         "nh_e": [
             "int"
         ],
-        "np": [
+        "nphi": [
             "int"
         ],
-        "npd": [
-            "int"
-        ],
-        "npd_e": [
+        "nphi_e": [
             "int"
         ],
         "nu": [
@@ -421,13 +563,34 @@
         ],
         "nz": [
             "int"
+        ],
+        "gnsf_nx1": [
+            "int"
+        ],
+        "gnsf_nz1": [
+            "int"
+        ],
+        "gnsf_nuhat": [
+            "int"
+        ],
+        "gnsf_ny": [
+            "int"
+        ],
+        "gnsf_nout": [
+            "int"
         ]
     },
-    "model_name": [
-        "str"
-    ],
-    "solver_config": {
+    "solver_options": {
+        "time_steps": [
+            "ndarray",
+            [
+                "N"
+            ]
+        ],
         "hessian_approx": [
+            "str"
+        ],
+        "regularize_method": [
             "str"
         ],
         "integrator_type": [
@@ -436,11 +599,89 @@
         "nlp_solver_type": [
             "str"
         ],
+        "nlp_solver_step_length": [
+            "float"
+        ],
+        "levenberg_marquardt": [
+            "float"
+        ],
         "qp_solver": [
             "str"
         ],
         "tf": [
             "float"
+        ],
+        "Tsim": [
+            "float"
+        ],
+        "sim_method_num_stages": [
+            "int"
+        ],
+        "sim_method_num_steps": [
+            "int"
+        ],
+        "sim_method_newton_iter": [
+            "int"
+        ],
+        "sim_method_jac_reuse": [
+            "bool"
+        ],
+        "qp_solver_cond_N": [
+            "int"
+        ],
+        "qp_solver_tol_stat": [
+            "float"
+        ],
+        "qp_solver_tol_eq": [
+            "float"
+        ],
+        "qp_solver_tol_ineq": [
+            "float"
+        ],
+        "qp_solver_tol_comp": [
+            "float"
+        ],
+        "qp_solver_iter_max": [
+            "int"
+        ],
+        "nlp_solver_tol_stat": [
+            "float"
+        ],
+        "nlp_solver_tol_eq": [
+            "float"
+        ],
+        "nlp_solver_tol_ineq": [
+            "float"
+        ],
+        "nlp_solver_tol_comp": [
+            "float"
+        ],
+        "nlp_solver_max_iter": [
+            "int"
+        ],
+        "print_level": [
+            "int"
+        ],
+        "initialize_t_slacks": [
+            "int"
+        ],
+        "exact_hess_cost": [
+            "int"
+        ],
+        "exact_hess_constr": [
+            "int"
+        ],
+        "exact_hess_dyn": [
+            "int"
+        ],
+        "ext_cost_num_hess": [
+            "int"
+        ],
+        "model_external_shared_lib_dir": [
+            "str"
+        ],
+        "model_external_shared_lib_name": [
+            "str"
         ]
     }
 }

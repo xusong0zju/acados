@@ -35,24 +35,19 @@
 clear all
 
 
-
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 
-
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
-param_scheme = 'multiple_shooting_unif_grid';
-%param_scheme = 'multiple_shooting';
-%shooting_nodes = [0 0.1 0.2 0.3 0.5 1];;
+%shooting_nodes = [0 0.1 0.2 0.3 0.5 1];
 N = 20;
+model_name = 'lin_mass';
 
 nlp_solver = 'sqp';
 %nlp_solver = 'sqp_rti';
@@ -77,7 +72,7 @@ sim_method_num_stages = 4;
 sim_method_num_steps = 3;
 %cost_type = 'linear_ls';
 %cost_type = 'nonlinear_ls';
-cost_type = 'ext_cost';
+cost_type = 'auto';
 
 
 
@@ -92,18 +87,23 @@ nx = model.nx;
 nu = model.nu;
 ny = nu+nx; % number of outputs in lagrange term
 ny_e = nx; % number of outputs in mayer term
-if 0
+
+% constraint formulation
+if 1
+    % bounds on x and u
 	nbx = nx/2;
 	nbu = nu;
 	ng = 0;
 	nh = 0;
 elseif 0
+    % general linear constraints on x and u
 	nbx = 0;
 	nbu = 0;
 	ng = nu+nx/2;
 	ng_e = nx;
 	nh = 0;
 else
+    % external function constraint
 	nbx = 0;
 	nbu = 0;
 	ng = 0;
@@ -147,24 +147,9 @@ end
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
-% dims
+ocp_model.set('name', model_name);
 ocp_model.set('T', T);
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-if (strcmp(cost_type, 'linear_ls')) | (strcmp(cost_type, 'nonlinear_ls'))
-	ocp_model.set('dim_ny', ny);
-	ocp_model.set('dim_ny_e', ny_e);
-end
-if (ng>0)
-	ocp_model.set('dim_ng', ng);
-	ocp_model.set('dim_ng_e', ng_e);
-elseif (nh>0)
-	ocp_model.set('dim_nh', nh);
-	ocp_model.set('dim_nh_e', nh_e);
-else
-	ocp_model.set('dim_nbx', nbx);
-	ocp_model.set('dim_nbu', nbu);
-end
+
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -238,11 +223,10 @@ ocp_model.model_struct
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', param_scheme);
 ocp_opts.set('param_scheme_N', N);
-if (strcmp(param_scheme, 'multiple_shooting'))
+if (exist('shooting_nodes', 'var'))
 	ocp_opts.set('param_scheme_shooting_nodes', shooting_nodes);
 end
 ocp_opts.set('nlp_solver', nlp_solver);
@@ -260,9 +244,7 @@ if (strcmp(dyn_type, 'explicit') || strcmp(dyn_type, 'implicit'))
 	ocp_opts.set('sim_method_num_steps', sim_method_num_steps);
 end
 
-ocp_opts.opts_struct
-
-
+% ocp_opts.opts_struct
 
 %% acados ocp
 % create ocp
@@ -289,16 +271,7 @@ time_ext = toc
 %x0(1) = 1.5;
 %ocp.set('constr_x0', x0);
 
-
-%ocp.set('cost_y_ref', 1);
-
 % if not set, the trajectory is initialized with the previous solution
-
-
-%tic;
-%ocp.solve();
-%time_ext = toc
-
 
 
 % get solution
@@ -306,6 +279,24 @@ u = ocp.get('u');
 x = ocp.get('x');
 
 
+% get info
+status = ocp.get('status');
+sqp_iter = ocp.get('sqp_iter');
+time_tot = ocp.get('time_tot');
+time_lin = ocp.get('time_lin');
+time_reg = ocp.get('time_reg');
+time_qp_sol = ocp.get('time_qp_sol');
+
+fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms], time_reg = %f [ms])\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_reg*1e3);
+
+% print statistics
+ocp.print('stat')
+
+if status==0
+	fprintf('\nsuccess!\n\n');
+else
+	fprintf('\nsolution failed!\n\n');
+end
 
 % plot result
 figure()
@@ -318,59 +309,6 @@ plot(1:N, u);
 ylabel('u')
 xlabel('sample')
 
-
-
-status = ocp.get('status');
-sqp_iter = ocp.get('sqp_iter');
-time_tot = ocp.get('time_tot');
-time_lin = ocp.get('time_lin');
-time_reg = ocp.get('time_reg');
-time_qp_sol = ocp.get('time_qp_sol');
-
-fprintf('\nstatus = %d, sqp_iter = %d, time_ext = %f [ms], time_int = %f [ms] (time_lin = %f [ms], time_qp_sol = %f [ms], time_reg = %f [ms])\n', status, sqp_iter, time_ext*1e3, time_tot*1e3, time_lin*1e3, time_qp_sol*1e3, time_reg*1e3);
-
-stat = ocp.get('stat');
-if (strcmp(nlp_solver, 'sqp'))
-	fprintf('\niter\tres_g\t\tres_b\t\tres_d\t\tres_m\t\tqp_stat\tqp_iter');
-	if size(stat,2)>7
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%e\t%e\t%e\t%e\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3), stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		if size(stat,2)>7
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,8), stat(ii,9), stat(ii,10), stat(ii,11));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-else % sqp_rti
-	fprintf('\niter\tqp_stat\tqp_iter');
-	if size(stat,2)>3
-		fprintf('\tqp_res_g\tqp_res_b\tqp_res_d\tqp_res_m');
-	end
-	fprintf('\n');
-	for ii=1:size(stat,1)
-		fprintf('%d\t%d\t%d', stat(ii,1), stat(ii,2), stat(ii,3));
-		if size(stat,2)>3
-			fprintf('\t%e\t%e\t%e\t%e', stat(ii,4), stat(ii,5), stat(ii,6), stat(ii,7));
-		end
-		fprintf('\n');
-	end
-	fprintf('\n');
-end
-
-
-
-if status==0
-	fprintf('\nsuccess!\n\n');
-else
-	fprintf('\nsolution failed!\n\n');
-end
-
-
 if is_octave()
     waitforbuttonpress;
 end
-
-return;

@@ -53,9 +53,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     int acados_size, tmp;
     long long *ptr;
     char fun_name[50] = "sim_set";
-    char buffer [100]; // for error messages
+    char buffer [300]; // for error messages
 
     /* RHS */
+
+    // model_struct
+    char *ext_fun_type;
+    const mxArray *matlab_model = prhs[0];
+    if (mxGetField( matlab_model, 0, "ext_fun_type" )!=NULL)
+        ext_fun_type = mxArrayToString( mxGetField( matlab_model, 0, "ext_fun_type" ) );
+
     const mxArray *C_sim = prhs[2];
     const mxArray *C_ext_fun_pointers = prhs[3];
 
@@ -71,6 +78,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // in
     ptr = (long long *) mxGetData( mxGetField( C_sim, 0, "in" ) );
     sim_in *in = (sim_in *) ptr[0];
+    // method
+    int method = mxGetScalar( mxGetField( C_sim, 0, "method" ) );
 
     // field
     char *field = mxArrayToString( prhs[4] );
@@ -81,9 +90,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // check dimension, set value
     if (!strcmp(field, "T"))
     {
-        acados_size = 1;
-        MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
-        sim_in_set(config, dims, in, field, value);
+        if (method != GNSF)
+        {
+            acados_size = 1;
+            MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+            sim_in_set(config, dims, in, field, value);
+        }
+        else
+        {
+            MEX_FIELD_NOT_SUPPORTED_FOR_SOLVER(fun_name, field, "irk_gnsf")
+        }
     }
     else if (!strcmp(field, "x"))
     {
@@ -99,22 +115,79 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     else if (!strcmp(field, "p"))
     {
-        external_function_param_casadi *ext_fun_param_ptr;
-
         // loop over number of external functions;
         int struct_size = mxGetNumberOfFields( C_ext_fun_pointers );
         for (int ii=0; ii<struct_size; ii++)
         {
 //            printf("\n%s\n", mxGetFieldNameByNumber( C_ext_fun_pointers, ii) );
             ptr = (long long *) mxGetData( mxGetFieldByNumber( C_ext_fun_pointers, 0, ii ) );
-            if (ptr[0]!=0)
+            // external function param casadi
+            if (!strcmp(ext_fun_type, "casadi"))
             {
-                ext_fun_param_ptr = (external_function_param_casadi *) ptr[0];
-                acados_size = ext_fun_param_ptr->np;
-                MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+                if (ptr[0]!=0)
+                {
+                    external_function_param_casadi *ext_fun_ptr = (external_function_param_casadi *) ptr[0];
+                    acados_size = ext_fun_ptr->np;
+                    MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
 
-                ext_fun_param_ptr->set_param(ext_fun_param_ptr, value);
+                    ext_fun_ptr->set_param(ext_fun_ptr, value);
+                }
             }
+            // external function param generic
+            else if (!strcmp(ext_fun_type, "generic"))
+            {
+                if (ptr[0]!=0)
+                {
+                    external_function_param_generic *ext_fun_ptr = (external_function_param_generic *) ptr[0];
+                    acados_size = ext_fun_ptr->np;
+                    MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+
+                    ext_fun_ptr->set_param(ext_fun_ptr, value);
+                }
+            }
+            else
+            {
+                MEX_FIELD_VALUE_NOT_SUPPORTED_SUGGEST(fun_name, "ext_fun_type", ext_fun_type, "casadi, generic");
+            }
+        }
+    }
+    else if (!strcmp(field, "xdot"))
+    {
+        if (method == IRK || method == LIFTED_IRK)
+        {
+            sim_dims_get(config, dims, "nx", &acados_size);
+            MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+            sim_solver_set(solver, field, value);
+        }
+        else
+        {
+            MEX_FIELD_ONLY_SUPPORTED_FOR_SOLVER(fun_name, field, "irk");
+        }
+    }
+    else if (!strcmp(field, "z"))
+    {
+        if (method == IRK || method == LIFTED_IRK)
+        {
+            sim_dims_get(config, dims, "nz", &acados_size);
+            MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+            sim_solver_set(solver, field, value);
+        }
+        else
+        {
+            MEX_FIELD_ONLY_SUPPORTED_FOR_SOLVER(fun_name, field, "irk");
+        }
+    }
+    else if (!strcmp(field, "phi_guess"))
+    {
+        if (method == GNSF)
+        {
+            sim_dims_get(config, dims, "nout", &acados_size);
+            MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
+            sim_solver_set(solver, field, value);
+        }
+        else
+        {
+            MEX_FIELD_ONLY_SUPPORTED_FOR_SOLVER(fun_name, field, "irk_gnsf");
         }
     }
     else if (!strcmp(field, "seed_adj"))
@@ -126,28 +199,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
         sim_in_set(config, dims, in, field, value);
     }
-    else if(!strcmp(field, "xdot"))
-    {
-        sim_dims_get(config, dims, "nx", &acados_size);
-        MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
-        sim_solver_set(solver, field, value);
-    }
-    else if(!strcmp(field, "z"))
-    {
-        sim_dims_get(config, dims, "nz", &acados_size);
-        MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
-        sim_solver_set(solver, field, value);
-    }
-    else if(!strcmp(field, "phi_guess"))
-    {
-        // TODO(oj): check if irk_gnsf
-        sim_dims_get(config, dims, "nout", &acados_size);
-        MEX_DIM_CHECK_VEC(fun_name, field, matlab_size, acados_size);
-        sim_solver_set(solver, field, value);
-    }
     else
     {
-        MEX_FIELD_NOT_SUPPORTED(fun_name, field);
+        MEX_FIELD_NOT_SUPPORTED_SUGGEST(fun_name, field, "T, x, u, p, xdot, z, phi_guess, seed_adj");
     }
 
     return;

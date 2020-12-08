@@ -36,53 +36,42 @@
 #include <stdio.h>
 #include <string.h>
 // acados
-//#include "acados/sim/sim_common.h"
 #include "acados_c/ocp_nlp_interface.h"
 // mex
 #include "mex.h"
 
 
-
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
-	{
+{
+    long long *ptr;
 
-//	mexPrintf("\nin ocp_solve\n");
+    /* RHS */
 
-	long long *ptr;
+    // C_ocp
 
-	/* RHS */
+    // solver
+    ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "solver" ) );
+    ocp_nlp_solver *solver = (ocp_nlp_solver *) ptr[0];
+    // sens_out
+    ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "sens_out" ) );
+    ocp_nlp_out *sens_out = (ocp_nlp_out *) ptr[0];
 
-	// C_ocp
+    // field
+    char *field = mxArrayToString( prhs[1] );
 
-	// solver
-	ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "solver" ) );
-	ocp_nlp_solver *solver = (ocp_nlp_solver *) ptr[0];
-	// sens_out
-	ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "sens_out" ) );
-	ocp_nlp_out *sens_out = (ocp_nlp_out *) ptr[0];
+    // stage
+    int stage = mxGetScalar( prhs[2] );
 
-	// field
-	char *field = mxArrayToString( prhs[1] );
+    // index
+    int index = mxGetScalar( prhs[3] );
 
-	// stage
-	int stage = mxGetScalar( prhs[2] );
-
-	// index
-	int index = mxGetScalar( prhs[3] );
-
-
-
-	/* solver */
-	ocp_nlp_eval_param_sens(solver, field, stage, index, sens_out);
+    /* solver */
+    ocp_nlp_eval_param_sens(solver, field, stage, index, sens_out);
 
 
+    return;
 
-	/* return */
-
-	return;
-
-	}
-
+}
 
 
 

@@ -44,37 +44,30 @@
 
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
-	{
+{
+    long long *ptr;
 
-//	mexPrintf("\nin sim_solve\n");
+    /* RHS */
 
-	long long *ptr;
+    // C_sim
 
-	/* RHS */
-
-	// C_sim
-
-	// solver
-	ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "solver" ) );
-	sim_solver *solver = (sim_solver *) ptr[0];
-	// in
-	ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "in" ) );
-	sim_in *in = (sim_in *) ptr[0];
-	// out
-	ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "out" ) );
-	sim_out *out = (sim_out *) ptr[0];
+    // solver
+    ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "solver" ) );
+    sim_solver *solver = (sim_solver *) ptr[0];
+    // in
+    ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "in" ) );
+    sim_in *in = (sim_in *) ptr[0];
+    // out
+    ptr = (long long *) mxGetData( mxGetField( prhs[0], 0, "out" ) );
+    sim_out *out = (sim_out *) ptr[0];
 
 
 
-	/* solver */
-	int acados_return = sim_solve(solver, in, out);
+    /* solver */
+    int acados_return = sim_solve(solver, in, out);
 
+    return;
 
-
-	/* return */
-
-	return;
-
-	}
+}
 
 

@@ -39,15 +39,13 @@ clear all
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 
 
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 %method = 'erk';
 method = 'irk';
@@ -77,8 +75,6 @@ if (strcmp(method, 'erk'))
 	if isfield(model, 'sym_u')
 		sim_model.set('sym_u', model.sym_u);
 	end
-	sim_model.set('dim_nx', model.nx);
-	sim_model.set('dim_nu', model.nu);
 else % irk irk_gnsf
 	sim_model.set('dyn_type', 'implicit');
 	sim_model.set('dyn_expr_f', model.expr_f_impl);
@@ -90,9 +86,6 @@ else % irk irk_gnsf
 %	if isfield(model, 'sym_z')
 %		sim_model.set('sym_z', model.sym_z);
 %	end
-	sim_model.set('dim_nx', model.nx);
-	sim_model.set('dim_nu', model.nu);
-%	sim_model.set('dim_nz', model.nz);
 end
 
 sim_model.model_struct
@@ -102,7 +95,7 @@ sim_model.model_struct
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', num_stages);
 sim_opts.set('num_steps', num_steps);
@@ -156,5 +149,3 @@ Su
 
 fprintf('\nsuccess!\n\n');
 
-
-return;

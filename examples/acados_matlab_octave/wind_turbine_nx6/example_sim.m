@@ -38,19 +38,15 @@ clear all
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
-
-
 
 % load sim data
 load testSim.mat
 
 
 %% arguments
-compile_mex = 'true';
+compile_interface = 'auto';
 codgen_model = 'true';
 method = 'irk'; % irk, erk, irk_gnsf
 % method = 'irk_gnsf';
@@ -58,18 +54,11 @@ sens_forw = 'true';
 num_stages = 4;
 num_steps = 4;
 
-
-
 %% parametric model
 model = sim_model_wind_turbine_nx6;
-
-model
-
 nx = model.nx;
 nu = model.nu;
 np = model.np;
-
-
 
 %% acados sim model
 Ts = 0.2;
@@ -84,10 +73,6 @@ if isfield(model, 'sym_p')
     sim_model.set('sym_p', model.sym_p);
 end
 
-sim_model.set('dim_nx', model.nx);
-sim_model.set('dim_nu', model.nu);
-sim_model.set('dim_np', model.np);
-
 if (strcmp(method, 'erk'))
 	sim_model.set('dyn_type', 'explicit');
 	sim_model.set('dyn_expr_f', model.expr_f_expl);
@@ -99,23 +84,16 @@ else % irk irk_gnsf
 %	if isfield(model, 'sym_z')
 %		sim_model.set('sym_z', model.sym_z);
 %	end
-%	sim_model.set('dim_nz', model.nz);
 end
-
-sim_model.model_struct
-
-
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', num_stages);
 sim_opts.set('num_steps', num_steps);
 sim_opts.set('method', method);
 sim_opts.set('sens_forw', sens_forw);
-
-sim_opts.opts_struct
 
 
 %% acados sim
@@ -171,5 +149,3 @@ x_sim(:,1:nsim+1)
 
 fprintf('\nsuccess!\n\n');
 
-
-return;

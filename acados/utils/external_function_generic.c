@@ -45,6 +45,127 @@
 
 
 /************************************************
+ * generic external parametric function
+ ************************************************/
+
+int external_function_param_generic_struct_size()
+{
+    return sizeof(external_function_param_generic);
+}
+
+
+
+void external_function_param_generic_set_fun(external_function_param_generic *fun, void *value)
+{
+    fun->fun = value;
+    return;
+}
+
+static void external_function_param_generic_set_param_sparse(void *self, int n_update,
+                                                             int *idx, double *p)
+{
+    external_function_param_generic *fun = self;
+
+    for (int ii = 0; ii < n_update; ii++)
+    {
+        fun->p[idx[ii]] = p[ii];
+    }
+
+    return;
+}
+
+
+int external_function_param_generic_calculate_size(external_function_param_generic *fun, int np)
+{
+    // wrapper as evaluate function
+    fun->evaluate = &external_function_param_generic_wrapper;
+
+    // set param function
+    fun->get_nparam = &external_function_param_generic_get_nparam;
+    fun->set_param = &external_function_param_generic_set_param;
+    fun->set_param_sparse = &external_function_param_generic_set_param_sparse;
+
+    // set number of parameters
+    fun->np = np;
+
+    int size = 0;
+
+    // doubles
+    size += fun->np * sizeof(double); // p
+
+    size += 8;  // align to double
+
+    // make_int_multiple_of(64, &size);
+
+    return size;
+}
+
+
+
+void external_function_param_generic_assign(external_function_param_generic *fun, void *raw_memory)
+{
+    // save initial pointer to external memory
+    fun->ptr_ext_mem = raw_memory;
+
+    // char pointer for byte advances
+    char *c_ptr = raw_memory;
+
+    // align to double
+    align_char_to(8, &c_ptr);
+
+    // p
+    assign_and_advance_double(fun->np, &fun->p, &c_ptr);
+
+    assert((char *) raw_memory + external_function_param_generic_calculate_size(fun, fun->np) >= c_ptr);
+
+    return;
+}
+
+
+
+void external_function_param_generic_wrapper(void *self, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_out, void **out)
+{
+	// TODO somehow check on types ?????
+
+    // cast into external generic function
+    external_function_param_generic *fun = self;
+
+    // call casadi function
+    fun->fun(in, out, fun->p);
+
+    return;
+}
+
+
+
+void external_function_param_generic_get_nparam(void *self, int *np)
+{
+    // cast into external generic function
+    external_function_param_generic *fun = self;
+
+	*np = fun->np;
+
+    return;
+}
+
+
+
+void external_function_param_generic_set_param(void *self, double *p)
+{
+    // cast into external generic function
+    external_function_param_generic *fun = self;
+
+    // set value for all parameters
+    for (int ii = 0; ii < fun->np; ii++)
+    {
+        fun->p[ii] = p[ii];
+    }
+
+    return;
+}
+
+
+/************************************************
  * casadi utils
  ************************************************/
 
@@ -242,7 +363,7 @@ static void d_cvt_casadi_to_dvec(double *in, int *sparsity_in, struct blasfeo_dv
 
     if (dense)
     {
-        blasfeo_pack_dvec(n, in, out, 0);
+        blasfeo_pack_dvec(n, in, 1, out, 0);
     }
     else
     {
@@ -280,7 +401,7 @@ static void d_cvt_dvec_to_casadi(struct blasfeo_dvec *in, double *out, int *spar
 
     if (dense)
     {
-        blasfeo_unpack_dvec(n, in, 0, out);
+        blasfeo_unpack_dvec(n, in, 0, out, 1);
     }
     else
     {
@@ -486,7 +607,7 @@ static void d_cvt_casadi_to_dvec_args(double *in, int *sparsity_in, struct blasf
 
     if (dense)
     {
-        blasfeo_pack_dvec(n, in, x, xi);
+        blasfeo_pack_dvec(n, in, 1, x, xi);
     }
     else
     {
@@ -527,7 +648,7 @@ static void d_cvt_dvec_args_to_casadi(struct blasfeo_dvec_args *in, double *out,
 
     if (dense)
     {
-        blasfeo_unpack_dvec(n, x, xi, out);
+        blasfeo_unpack_dvec(n, x, xi, out, 1);
     }
     else
     {
@@ -734,6 +855,7 @@ void external_function_casadi_wrapper(void *self, ext_fun_arg_t *type_in, void *
                 d_cvt_dvec_to_casadi(in[ii], (double *) fun->args[ii],
                                      (int *) fun->casadi_sparsity_in(ii));
                 break;
+
             case COLMAJ_ARGS:
                 d_cvt_colmaj_args_to_casadi(in[ii], (double *) fun->args[ii],
                                             (int *) fun->casadi_sparsity_in(ii));
@@ -755,7 +877,7 @@ void external_function_casadi_wrapper(void *self, ext_fun_arg_t *type_in, void *
 
             default:
                 printf("\ntype in %d\n", type_in[ii]);
-                printf("\nUnknown external function argument type\n\n");
+                printf("\nUnknown external function argument type for argument %i\n\n", ii);
                 exit(1);
         }
     }
@@ -781,6 +903,7 @@ void external_function_casadi_wrapper(void *self, ext_fun_arg_t *type_in, void *
                 d_cvt_casadi_to_dvec((double *) fun->res[ii], (int *) fun->casadi_sparsity_out(ii),
                                      out[ii]);
                 break;
+
             case COLMAJ_ARGS:
                 d_cvt_casadi_to_colmaj_args((double *) fun->res[ii],
                                             (int *) fun->casadi_sparsity_out(ii), out[ii]);
@@ -802,7 +925,7 @@ void external_function_casadi_wrapper(void *self, ext_fun_arg_t *type_in, void *
 
             default:
                 printf("\ntype out %d\n", type_out[ii]);
-                printf("\nUnknown external function argument type\n\n");
+                printf("\nUnknown external function argument type for output %i\n\n", ii);
                 exit(1);
         }
     }
@@ -869,6 +992,20 @@ void external_function_param_casadi_set_n_out(external_function_param_casadi *fu
 
 
 
+static void external_function_param_casadi_set_param_sparse(void *self, int n_update,
+                                                            int *idx, double *p)
+{
+    external_function_param_casadi *fun = self;
+
+    for (int ii = 0; ii < n_update; ii++)
+    {
+        fun->p[idx[ii]] = p[ii];
+    }
+
+    return;
+}
+
+
 int external_function_param_casadi_calculate_size(external_function_param_casadi *fun, int np)
 {
     // loop index
@@ -878,7 +1015,9 @@ int external_function_param_casadi_calculate_size(external_function_param_casadi
     fun->evaluate = &external_function_param_casadi_wrapper;
 
     // set param function
+    fun->get_nparam = &external_function_param_casadi_get_nparam;
     fun->set_param = &external_function_param_casadi_set_param;
+    fun->set_param_sparse = &external_function_param_casadi_set_param_sparse;
 
     // set number of parameters
     fun->np = np;
@@ -1023,8 +1162,13 @@ void external_function_param_casadi_wrapper(void *self, ext_fun_arg_t *type_in, 
                                           (int *) fun->casadi_sparsity_in(ii));
                 break;
 
+            case IGNORE_ARGUMENT:
+                // do nothing
+                break;
+
             default:
-                printf("\nUnknown external function argument type\n\n");
+                printf("\ntype in %d\n", type_in[ii]);
+                printf("\nUnknown external function argument type for argument %i\n\n", ii);
                 exit(1);
         }
     }
@@ -1068,8 +1212,13 @@ void external_function_param_casadi_wrapper(void *self, ext_fun_arg_t *type_in, 
                                           (int *) fun->casadi_sparsity_out(ii), out[ii]);
                 break;
 
+            case IGNORE_ARGUMENT:
+                // do nothing
+                break;
+
             default:
-                printf("\nUnknown external function argument type\n\n");
+                printf("\ntype in %d\n", type_out[ii]);
+                printf("\nUnknown external function argument type for output %i\n\n", ii);
                 exit(1);
         }
     }
@@ -1079,15 +1228,27 @@ void external_function_param_casadi_wrapper(void *self, ext_fun_arg_t *type_in, 
 
 
 
+void external_function_param_casadi_get_nparam(void *self, int *np)
+{
+    // cast into external casadi function
+    external_function_param_casadi *fun = self;
+
+	*np = fun->np;
+
+    return;
+}
+
+
 void external_function_param_casadi_set_param(void *self, double *p)
 {
     // cast into external casadi function
     external_function_param_casadi *fun = self;
 
-    // loop index
-    int ii;
-
-    for (ii = 0; ii < fun->np; ii++) fun->p[ii] = p[ii];
+    // set value for all parameters
+    for (int ii = 0; ii < fun->np; ii++)
+    {
+        fun->p[ii] = p[ii];
+    }
 
     return;
 }

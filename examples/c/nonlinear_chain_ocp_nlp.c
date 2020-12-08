@@ -946,7 +946,7 @@ int main()
 	for (int i = 0; i <= NN; i++)
 	{
 		if (i < 3)
-			plan->nlp_cost[i] = EXTERNALLY_PROVIDED;  // also implements linear LS for this example
+			plan->nlp_cost[i] = EXTERNAL;  // also implements linear LS for this example
 		else if (i%2 == 0)
 			plan->nlp_cost[i] = LINEAR_LS;
 		else if (i%2 == 1)
@@ -999,7 +999,7 @@ int main()
 
 	for (int i = 0; i <= NN; i++)
     {
-		if (plan->nlp_cost[i] != EXTERNALLY_PROVIDED)
+		if (plan->nlp_cost[i] != EXTERNAL)
 		{
 	        ocp_nlp_dims_set_cost(config, dims, i, "ny", &ny[i]);
 		}
@@ -1105,7 +1105,7 @@ int main()
 				external_function_casadi_create(&ls_cost_jac_casadi[i]);
 				break;
 
-			case EXTERNALLY_PROVIDED:
+			case EXTERNAL:
 				select_external_stage_cost_casadi(i, NN, NMF, &external_cost[i]);
 				external_function_casadi_create(&external_cost[i]);
 				break;
@@ -1195,9 +1195,9 @@ int main()
 				ocp_nlp_cost_model_set(config, dims, nlp_in, i, "yref", y_ref);
 				break;
 
-			case EXTERNALLY_PROVIDED:
+			case EXTERNAL:
 
-				ocp_nlp_cost_model_set(config, dims, nlp_in, i, "ext_cost_jac_hes", &external_cost[i]);
+				ocp_nlp_cost_model_set(config, dims, nlp_in, i, "ext_cost_fun_jac_hes", &external_cost[i]);
 
 				assert(i < NN && "externally provided cost not implemented for last stage!");
 
@@ -1316,7 +1316,7 @@ int main()
     * sqp opts
     ************************************************/
 
-	void *nlp_opts = ocp_nlp_opts_create(config, dims);
+	void *nlp_opts = ocp_nlp_solver_opts_create(config, dims);
 
     for (int i = 0; i < NN; ++i)
 	{
@@ -1326,15 +1326,15 @@ int main()
 			{
 				int ns = 4;
 
-				ocp_nlp_dynamics_opts_set(config, nlp_opts, i, "ns", &ns);
+				ocp_nlp_solver_opts_set_at_stage(config, nlp_opts, i, "dynamics_ns", &ns);
 			}
 			else if (plan->sim_solver_plan[i].sim_solver == IRK)
 			{
 				int ns = 2;
 				bool jac_reuse = true;
 
-				ocp_nlp_dynamics_opts_set(config, nlp_opts, i, "ns", &ns);
-				ocp_nlp_dynamics_opts_set(config, nlp_opts, i, "jac_reuse", &jac_reuse);
+				ocp_nlp_solver_opts_set_at_stage(config, nlp_opts, i, "dynamics_ns", &ns);
+				ocp_nlp_solver_opts_set_at_stage(config, nlp_opts, i, "dynamics_jac_reuse", &jac_reuse);
 			}
 		}
     }
@@ -1345,11 +1345,11 @@ int main()
     double tol_ineq = 1e-9;
     double tol_comp = 1e-9;
 
-    ocp_nlp_opts_set(config, nlp_opts, "max_iter", &max_iter);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "max_iter", &max_iter);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
 
     /************************************************
     * ocp_nlp out
@@ -1372,8 +1372,8 @@ int main()
 		// warm start output initial guess of solution
 		for (int i=0; i<=NN; i++)
 		{
-			blasfeo_pack_dvec(nu[i], uref, nlp_out->ux+i, 0);
-			blasfeo_pack_dvec(nx[i], xref, nlp_out->ux+i, nu[i]);
+			blasfeo_pack_dvec(nu[i], uref, 1, nlp_out->ux+i, 0);
+			blasfeo_pack_dvec(nx[i], xref, 1, nlp_out->ux+i, nu[i]);
 		}
 
 		// call nlp solver
@@ -1442,7 +1442,7 @@ int main()
 	free(erk4_casadi);
 
 	// free ocp_nlp module
-	ocp_nlp_opts_destroy(nlp_opts);
+	ocp_nlp_solver_opts_destroy(nlp_opts);
 	ocp_nlp_in_destroy(nlp_in);
 	ocp_nlp_out_destroy(nlp_out);
 	ocp_nlp_solver_destroy(solver);
@@ -1476,7 +1476,7 @@ int main()
 			case NONLINEAR_LS:
 				external_function_casadi_free(&ls_cost_jac_casadi[i]);
 				break;
-			case EXTERNALLY_PROVIDED:
+			case EXTERNAL:
 				external_function_casadi_free(&external_cost[i]);
 			default:
 				break;

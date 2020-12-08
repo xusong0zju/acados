@@ -34,17 +34,19 @@
 %% test of native matlab interface
 clear all
 
+GENERATE_C_CODE = 0;
+
+model_name = 'ocp_pendulum';
+
 % check that env.sh has been run
 env_run = getenv('ENV_RUN');
 if (~strcmp(env_run, 'true'))
-	disp('ERROR: env.sh has not been sourced! Before executing this example, run:');
-	disp('source env.sh');
-	return;
+	error('env.sh has not been sourced! Before executing this example, run: source env.sh');
 end
 
 
 %% options
-compile_mex = 'true'; % true, false
+compile_interface = 'auto'; % true, false
 codgen_model = 'true'; % true, false
 % simulation
 sim_method = 'irk'; % erk, irk, irk_gnsf
@@ -52,19 +54,19 @@ sim_sens_forw = 'false'; % true, false
 sim_num_stages = 4;
 sim_num_steps = 4;
 % ocp
-param_scheme = 'multiple_shooting_unif_grid';
 ocp_N = 100;
 %nlp_solver = 'sqp_rti';
 %nlp_solver_exact_hessian = 'false';
 nlp_solver = 'sqp'; % sqp, sqp_rti
-nlp_solver_exact_hessian = 'true';
+nlp_solver_exact_hessian = 'false';
 regularize_method = 'project_reduc_hess'; % no_regularize, project,...
 	% project_reduc_hess, mirror, convexify
 %regularize_method = 'mirror';
 %regularize_method = 'convexify';
 nlp_solver_max_iter = 100;
 qp_solver = 'partial_condensing_hpipm';
-        % full_condensing_hpipm, partial_condensing_hpipm
+        % full_condensing_hpipm, partial_condensing_hpipm, full_condensing_qpoases
+qp_solver_iter_max = 100;
 qp_solver_cond_N = 5;
 qp_solver_warm_start = 0;
 qp_solver_cond_ric_alg = 0; % 0: dont factorize hessian in the condensing; 1: factorize
@@ -133,21 +135,8 @@ ubu =  80*ones(nu, 1);
 
 %% acados ocp model
 ocp_model = acados_ocp_model();
+ocp_model.set('name', model_name);
 ocp_model.set('T', T);
-
-% dims
-ocp_model.set('dim_nx', nx);
-ocp_model.set('dim_nu', nu);
-if (strcmp(cost_type, 'linear_ls'))
-	ocp_model.set('dim_ny', ny);
-	ocp_model.set('dim_ny_e', ny_e);
-end
-ocp_model.set('dim_nbx', nbx);
-ocp_model.set('dim_nbu', nbu);
-ocp_model.set('dim_ng', ng);
-ocp_model.set('dim_ng_e', ng_e);
-ocp_model.set('dim_nh', nh);
-ocp_model.set('dim_nh_e', nh_e);
 
 % symbolics
 ocp_model.set('sym_x', model.sym_x);
@@ -214,9 +203,8 @@ ocp_model.model_struct
 
 %% acados ocp opts
 ocp_opts = acados_ocp_opts();
-ocp_opts.set('compile_mex', compile_mex);
+ocp_opts.set('compile_interface', compile_interface);
 ocp_opts.set('codgen_model', codgen_model);
-ocp_opts.set('param_scheme', param_scheme);
 ocp_opts.set('param_scheme_N', ocp_N);
 ocp_opts.set('nlp_solver', nlp_solver);
 ocp_opts.set('nlp_solver_exact_hessian', nlp_solver_exact_hessian);
@@ -231,6 +219,7 @@ if (strcmp(qp_solver, 'partial_condensing_hpipm'))
 	ocp_opts.set('qp_solver_ric_alg', qp_solver_ric_alg);
 	ocp_opts.set('qp_solver_warm_start', qp_solver_warm_start);
 end
+ocp_opts.set('qp_solver_iter_max', qp_solver_iter_max);
 ocp_opts.set('sim_method', ocp_sim_method);
 ocp_opts.set('sim_method_num_stages', ocp_sim_method_num_stages);
 ocp_opts.set('sim_method_num_steps', ocp_sim_method_num_steps);
@@ -242,17 +231,13 @@ ocp_opts.opts_struct
 %% acados ocp
 % create ocp
 ocp = acados_ocp(ocp_model, ocp_opts);
-ocp
-ocp.C_ocp
-ocp.C_ocp_ext_fun
 
-
+if GENERATE_C_CODE == 1
+    ocp.generate_c_code()
+end
 
 %% acados sim model
 sim_model = acados_sim_model();
-% dims
-sim_model.set('dim_nx', nx);
-sim_model.set('dim_nu', nu);
 % symbolics
 sim_model.set('sym_x', model.sym_x);
 if isfield(model, 'sym_u')
@@ -276,7 +261,7 @@ end
 
 %% acados sim opts
 sim_opts = acados_sim_opts();
-sim_opts.set('compile_mex', compile_mex);
+sim_opts.set('compile_interface', compile_interface);
 sim_opts.set('codgen_model', codgen_model);
 sim_opts.set('num_stages', sim_num_stages);
 sim_opts.set('num_steps', sim_num_steps);
@@ -321,11 +306,12 @@ for ii=1:N_sim
 	ocp.set('init_u', u_traj_init);
 	ocp.set('init_pi', pi_traj_init);
 
-	% modify numerical data for a certain stage
+	% use ocp.set to modify numerical data for a certain stage
 	some_stages = 1:10:ocp_N-1;
 	for i = some_stages
-		ocp.set('cost_Vx', Vx, i); % cost_y_ref, cost_Vu, cost_Vx, cost_W, cost_Z, cost_Zl,...
-		 % cost_Zu, cost_z, cost_zl, cost_zu;
+        if strcmp( ocp.model_struct.cost_type, 'linear_ls')
+            ocp.set('cost_Vx', Vx, i);
+        end
 	end
 
 	% solve OCP
@@ -375,27 +361,27 @@ end
 avg_time_solve = toc/N_sim
 
 
-
+DO_PLOT = 0;
 % figures
+if DO_PLOT
 
-for ii=1:N_sim+1
-	x_cur = x_sim(:,ii);
-% 	visualize;
-end
+    for ii=1:N_sim+1
+        x_cur = x_sim(:,ii);
+    % 	visualize;
+    end
+
+    figure;
+    subplot(2,1,1);
+    plot(0:N_sim, x_sim);
+    xlim([0 N_sim]);
+    legend('p', 'theta', 'v', 'omega');
+    subplot(2,1,2);
+    plot(0:N_sim-1, u_sim);
+    xlim([0 N_sim]);
+    legend('F');
 
 
-
-figure;
-subplot(2,1,1);
-plot(0:N_sim, x_sim);
-xlim([0 N_sim]);
-legend('p', 'theta', 'v', 'omega');
-subplot(2,1,2);
-plot(0:N_sim-1, u_sim);
-xlim([0 N_sim]);
-legend('F');
-
-
-if is_octave()
-    waitforbuttonpress;
+    if is_octave()
+        waitforbuttonpress;
+    end
 end

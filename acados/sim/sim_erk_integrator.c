@@ -157,15 +157,13 @@ void *sim_erk_model_assign(void *config, void *dims, void *raw_memory)
 
 int sim_erk_model_set(void *model_, const char *field, void *value)
 {
-//    printf("\nsim_erk_model_set\n");
     erk_model *model = model_;
 
     if (!strcmp(field, "expl_ode_fun"))
     {
-//    printf("\nsim_erk_model_set expl_ode_fun\n");
         model->expl_ode_fun = value;
     }
-    else if (!strcmp(field, "expl_vde_for"))
+    else if (!strcmp(field, "expl_vde_for") || !strcmp(field, "expl_vde_forw"))
     {
         model->expl_vde_for = value;
     }
@@ -173,7 +171,7 @@ int sim_erk_model_set(void *model_, const char *field, void *value)
     {
         model->expl_vde_adj = value;
     }
-    else if (!strcmp(field, "expl_ode_hes"))
+    else if (!strcmp(field, "expl_ode_hes") || !strcmp(field, "expl_ode_hess"))
     {
         model->expl_ode_hes = value;
     }
@@ -236,10 +234,18 @@ void *sim_erk_opts_assign(void *config_, void *dims, void *raw_memory)
 
 
 
-int sim_erk_opts_set(void *config_, void *opts_, const char *field, void *value)
+void sim_erk_opts_set(void *config_, void *opts_, const char *field, void *value)
 {
     sim_opts *opts = (sim_opts *) opts_;
-    return sim_opts_set_(opts, field, value);
+    sim_opts_set_(opts, field, value);
+}
+
+
+
+void sim_erk_opts_get(void *config_, void *opts_, const char *field, void *value)
+{
+    sim_opts *opts = (sim_opts *) opts_;
+    sim_opts_get_(config_, opts, field, value);
 }
 
 
@@ -435,20 +441,32 @@ void sim_erk_opts_update(void *config_, void *dims, void *opts_)
 
 int sim_erk_memory_calculate_size(void *config, void *dims, void *opts_)
 {
-    return 0;
+    int size = sizeof(sim_erk_memory);
+
+    return size;
 }
+
 
 
 void *sim_erk_memory_assign(void *config, void *dims, void *opts_, void *raw_memory)
 {
-    return NULL;
+    char *c_ptr = (char *) raw_memory;
+
+    sim_erk_memory *mem = (sim_erk_memory *) c_ptr;
+    c_ptr += sizeof(sim_erk_memory);
+
+    return mem;
 }
+
+
 
 int sim_erk_memory_set(void *config_, void *dims_, void *mem_, const char *field, void *value)
 {
     printf("sim_erk_memory_set field %s is not supported! \n", field);
     exit(1);
 }
+
+
 
 int sim_erk_memory_set_to_zero(void *config_, void * dims_, void *opts_, void *mem_, const char *field)
 {
@@ -466,6 +484,35 @@ int sim_erk_memory_set_to_zero(void *config_, void * dims_, void *opts_, void *m
 
     return status;
 }
+
+
+
+void sim_erk_memory_get(void *config_, void *dims_, void *mem_, const char *field, void *value)
+{
+    sim_erk_memory *mem = mem_;
+
+    if (!strcmp(field, "time_sim"))
+    {
+        double *ptr = value;
+        *ptr = mem->time_sim;
+    }
+    else if (!strcmp(field, "time_sim_ad"))
+    {
+        double *ptr = value;
+        *ptr = mem->time_ad;
+    }
+    else if (!strcmp(field, "time_sim_la"))
+    {
+        double *ptr = value;
+        *ptr = mem->time_la;
+    }
+    else
+    {
+        printf("sim_erk_memory_get field %s is not supported! \n", field);
+        exit(1);
+    }
+}
+
 
 
 /************************************************
@@ -540,40 +587,70 @@ static void *sim_erk_cast_workspace(void *config_, void *dims_, void *opts_, voi
 
     char *c_ptr = (char *) raw_memory;
 
-    sim_erk_workspace *workspace = (sim_erk_workspace *) c_ptr;
+    sim_erk_workspace *work = (sim_erk_workspace *) c_ptr;
     c_ptr += sizeof(sim_erk_workspace);
 
     align_char_to(8, &c_ptr);
 
-    assign_and_advance_double(nX + nu, &workspace->rhs_forw_in, &c_ptr);
+    // switch to d_ptr
+    double *d_ptr = (double *) c_ptr;
+
+    //assign_and_advance_double(nX + nu, &workspace->rhs_forw_in, &c_ptr);
+    work->rhs_forw_in = d_ptr;
+    d_ptr += (nX+nu);
 
     if (opts->sens_adj | opts->sens_hess)
     {
-        assign_and_advance_double(ns * num_steps * nX, &workspace->K_traj, &c_ptr);
-        assign_and_advance_double((num_steps + 1) * nX, &workspace->out_forw_traj, &c_ptr);
+        //
+        //assign_and_advance_double(ns * num_steps * nX, &workspace->K_traj, &c_ptr);
+        work->K_traj = d_ptr;
+        d_ptr += ns*num_steps*nX;
+        //assign_and_advance_double((num_steps + 1) * nX, &workspace->out_forw_traj, &c_ptr);
+        work->out_forw_traj = d_ptr;
+        d_ptr += (num_steps+1)*nX;
+        
     }
     else
     {
-        assign_and_advance_double(ns * nX, &workspace->K_traj, &c_ptr);
-        assign_and_advance_double(nX, &workspace->out_forw_traj, &c_ptr);
+        //assign_and_advance_double(ns * nX, &workspace->K_traj, &c_ptr);
+        work->K_traj = d_ptr;
+        d_ptr += ns*nX;
+        //assign_and_advance_double(nX, &workspace->out_forw_traj, &c_ptr);
+        work->out_forw_traj = d_ptr;
+        d_ptr += nX;
     }
 
     if (opts->sens_hess) // && opts->sens_adj)
     {
-        assign_and_advance_double(nx + nX + nu, &workspace->rhs_adj_in, &c_ptr);
-        assign_and_advance_double(nx + nu + nhess, &workspace->out_adj_tmp, &c_ptr);
-        assign_and_advance_double(ns * (nx + nu + nhess), &workspace->adj_traj, &c_ptr);
+        //assign_and_advance_double(nx + nX + nu, &workspace->rhs_adj_in, &c_ptr);
+        work->rhs_adj_in = d_ptr;
+        d_ptr += nx+nX+nu;
+        //assign_and_advance_double(nx + nu + nhess, &workspace->out_adj_tmp, &c_ptr);
+        work->out_adj_tmp = d_ptr;
+        d_ptr += nx+nu+nhess;
+        //assign_and_advance_double(ns * (nx + nu + nhess), &workspace->adj_traj, &c_ptr);
+        work->adj_traj = d_ptr;
+        d_ptr += ns*(nx+nu+nhess);
     }
     else if (opts->sens_adj)
     {
-        assign_and_advance_double((nx * 2 + nu), &workspace->rhs_adj_in, &c_ptr);
-        assign_and_advance_double(nx + nu, &workspace->out_adj_tmp, &c_ptr);
-        assign_and_advance_double(ns * (nx + nu), &workspace->adj_traj, &c_ptr);
+        //assign_and_advance_double((nx * 2 + nu), &workspace->rhs_adj_in, &c_ptr);
+        work->rhs_adj_in = d_ptr;
+        d_ptr += 2*nx+nu;
+        //assign_and_advance_double(nx + nu, &workspace->out_adj_tmp, &c_ptr);
+        work->out_adj_tmp = d_ptr;
+        d_ptr += nu+nx;
+        //assign_and_advance_double(ns * (nx + nu), &workspace->adj_traj, &c_ptr);
+        work->adj_traj = d_ptr;
+        d_ptr += ns*(nu+nx);
     }
+
+    // update c_ptr
+    c_ptr = (char *) d_ptr;
 
     assert((char *) raw_memory + sim_erk_workspace_calculate_size(config_, dims, opts_) >= c_ptr);
 
-    return (void *) workspace;
+    return (void *) work;
 }
 
 /************************************************
@@ -593,6 +670,8 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     sim_config *config = config_;
     sim_opts *opts = opts_;
 
+    sim_erk_memory *mem = mem_;
+
     if ( opts->ns != opts->tableau_size )
     {
         printf("Error in sim_erk: the Butcher tableau size does not match ns\n");
@@ -603,8 +682,7 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     void *dims_ = in->dims;
     sim_erk_dims *dims = (sim_erk_dims *) dims_;
 
-    sim_erk_workspace *workspace =
-        (sim_erk_workspace *) sim_erk_cast_workspace(config, dims, opts, work_);
+    sim_erk_workspace *work = sim_erk_cast_workspace(config, dims, opts, work_);
 
     int i, j, s, istep;
     double a = 0, b = 0;  // temp values of A_mat and b_vec
@@ -647,13 +725,13 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     double *b_vec = opts->b_vec;
     //    double *c_vec = opts->c_vec;
 
-    double *K_traj = workspace->K_traj;
-    double *forw_traj = workspace->out_forw_traj;
-    double *rhs_forw_in = workspace->rhs_forw_in;
+    double *K_traj = work->K_traj;
+    double *forw_traj = work->out_forw_traj;
+    double *rhs_forw_in = work->rhs_forw_in;
 
-    double *adj_tmp = workspace->out_adj_tmp;
-    double *adj_traj = workspace->adj_traj;
-    double *rhs_adj_in = workspace->rhs_adj_in;
+    double *adj_tmp = work->out_adj_tmp;
+    double *adj_traj = work->adj_traj;
+    double *rhs_adj_in = work->rhs_adj_in;
 
     double *xn = out->xn;
     double *S_forw_out = out->S_forw;
@@ -661,15 +739,16 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     double *S_hess_out = out->S_hess;
 
     ext_fun_arg_t ext_fun_type_in[5];
-    void *ext_fun_in[5];  // XXX large enough ?
-    ext_fun_arg_t ext_fun_type_out[5];
-    void *ext_fun_out[5];  // XXX large enough ?
+    void *ext_fun_in[5];
+    ext_fun_arg_t ext_fun_type_out[3];
+    void *ext_fun_out[3];
 
     erk_model *model = in->model;
 
     acados_timer timer, timer_ad;
     double timing_ad = 0.0;
 
+    // start timer
     acados_tic(&timer);
 
     /************************************************
@@ -688,8 +767,8 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     {
         if (opts->sens_adj | opts->sens_hess)
         {
-            K_traj = workspace->K_traj + istep * ns * nX;
-            forw_traj = workspace->out_forw_traj + (istep + 1) * nX;
+            K_traj = work->K_traj + istep * ns * nX;
+            forw_traj = work->out_forw_traj + (istep + 1) * nX;
             for (i = 0; i < nX; i++)
                 forw_traj[i] = forw_traj[i - nX];
         }
@@ -742,6 +821,11 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
                 ext_fun_type_out[0] = COLMAJ;
                 ext_fun_out[0] = K_traj + s * nX + 0;  // fun: nx
 
+                if (model->expl_ode_fun == 0)
+                {
+                    printf("sim ERK: expl_ode_fun is not provided. Exiting.\n");
+                    exit(1);
+                }
                 model->expl_ode_fun->evaluate(model->expl_ode_fun, ext_fun_type_in, ext_fun_in,
                                               ext_fun_type_out, ext_fun_out);  // ODE evaluation
             }
@@ -792,8 +876,8 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
         for (istep = num_steps - 1; istep >= 0; istep--)
         {
 
-            K_traj = workspace->K_traj + istep * ns * nX;
-            forw_traj = workspace->out_forw_traj + istep*nX;
+            K_traj = work->K_traj + istep * ns * nX;
+            forw_traj = work->out_forw_traj + istep*nX;
 
             for (s = ns - 1; s >= 0; s--)
             {
@@ -854,6 +938,11 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
 //                    ext_fun_type_out[1] = COLMAJ;
 //                    ext_fun_out[1] = adj_traj + s * nAdj + nx + nu;  // hess: (nx+nu)*(nx+nu)
 
+                    if (model->expl_vde_adj == 0)
+                    {
+                        printf("sim ERK: expl_vde_adj is not provided. Exiting.\n");
+                        exit(1);
+                    }
                     // adjoint VDE evaluation
                     model->expl_vde_adj->evaluate(model->expl_vde_adj, ext_fun_type_in, ext_fun_in,
                             ext_fun_type_out, ext_fun_out);
@@ -927,6 +1016,10 @@ int sim_erk(void *config_, sim_in *in, sim_out *out, void *opts_, void *mem_, vo
     out->info->LAtime = 0.0;
     out->info->ADtime = timing_ad;
 
+    mem->time_sim = out->info->CPUtime;
+    mem->time_ad = out->info->ADtime;
+    mem->time_la = out->info->LAtime;
+
     // return
     return 0;  // success
 }
@@ -941,10 +1034,12 @@ void sim_erk_config_initialize_default(void *config_)
     config->opts_initialize_default = &sim_erk_opts_initialize_default;
     config->opts_update = &sim_erk_opts_update;
     config->opts_set = &sim_erk_opts_set;
+    config->opts_get = &sim_erk_opts_get;
     config->memory_calculate_size = &sim_erk_memory_calculate_size;
     config->memory_assign = &sim_erk_memory_assign;
     config->memory_set = &sim_erk_memory_set;
     config->memory_set_to_zero = &sim_erk_memory_set_to_zero;
+    config->memory_get = &sim_erk_memory_get;
     config->workspace_calculate_size = &sim_erk_workspace_calculate_size;
     config->model_calculate_size = &sim_erk_model_calculate_size;
     config->model_assign = &sim_erk_model_assign;

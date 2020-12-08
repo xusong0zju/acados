@@ -41,10 +41,10 @@ function [ model ] = pendulum_dae_model()
     %% CasADi
     import casadi.*
     casadi_version = CasadiMeta.version();
-    if strcmp(casadi_version(1:3),'3.4') % require casadi 3.4.x
+    if ( strcmp(casadi_version(1:3),'3.4') || strcmp(casadi_version(1:3),'3.5')) % require casadi 3.4.x
         casadi_opts = struct('mex', false, 'casadi_int', 'int', 'casadi_real', 'double');
     else % old casadi versions
-        error('Please download and install CasADi version 3.4.x to ensure compatibility with acados')
+        error('Please provide CasADi version 3.4 or 3.5 to ensure compatibility with acados')
     end
     model_name_prefix = 'pendulum_dae';
     
@@ -97,6 +97,9 @@ function [ model ] = pendulum_dae_model()
                      ax + vy * valpha + ypos * aalpha, ...
                      ay - vx * valpha - xpos * aalpha);
     
+    %% constraint
+    expr_h = ax^2 + ay^2;
+
     %% initial value
 %     x0 = [1; -5; 1; 0.1; -0.5; 0.1];
 %     z0 = [-1.5; -0.3; -0.3; -3; 19];
@@ -108,5 +111,6 @@ function [ model ] = pendulum_dae_model()
     model.sym_u = u;
     model.sym_z = z;
     model.name = model_name_prefix;
+    model.expr_h = expr_h;
     
 end

@@ -155,41 +155,52 @@ static void mass_spring_system(double Ts, int nx, int nu, double *A, double *B, 
 
 
 // hand-generated external function for externally provided hessian and gradient
-void ext_cost(void *fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_out, void **out)
+void ext_cost(void *ext_fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_out, void **out)
 {
     int ii;
 
     int nu = 3;
     int nx = 8;
 
-	// extract inputs
-	// 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *x_args = in[0];
-	struct blasfeo_dvec *x = x_args->x;
-	int xi = x_args->xi;
-	// 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *u_args = in[1];
-	struct blasfeo_dvec *u = u_args->x;
-	int ui = u_args->xi;
+    // extract inputs
+    // 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *x_args = in[0];
+    struct blasfeo_dvec *x = x_args->x;
+    int xi = x_args->xi;
+    // 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *u_args = in[1];
+    struct blasfeo_dvec *u = u_args->x;
+    int ui = u_args->xi;
 
-	// extract outputs
-	// 0: [grad_u; grad_x], size: nu+nx, type: BLASFEO_DVEC
-	struct blasfeo_dvec *grad = out[0];
-	// 1: [hess_uu, hess_ux; hess_xu, hess_xx], size: (nu+nx)*(nu+nx), type: BLASFEO_DMAT
-	struct blasfeo_dmat *hess = out[1];
+    // extract outputs
+    // 0: fun: COLMAJ
+    double *fun = out[0];
+    // 1: [grad_u; grad_x], size: nu+nx, type: BLASFEO_DVEC
+    struct blasfeo_dvec *grad = out[1];
+    // 2: [hess_uu, hess_ux; hess_xu, hess_xx], size: (nu+nx)*(nu+nx), type: BLASFEO_DMAT
+    struct blasfeo_dmat *hess = out[2];
 
     // Hessian
-	blasfeo_dgese(nu+nx, nu+nx, 0.0, hess, 0, 0);
-	for(ii=0; ii<nu; ii++)
-		BLASFEO_DMATEL(hess, ii, ii) = 2.0; // R
-	for(; ii<nu+nx; ii++)
-		BLASFEO_DMATEL(hess, ii, ii) = 1.0; // Q
+    blasfeo_dgese(nu+nx, nu+nx, 0.0, hess, 0, 0);
+    for(ii=0; ii<nu; ii++)
+        BLASFEO_DMATEL(hess, ii, ii) = 2.0; // R
+    for(; ii<nu+nx; ii++)
+        BLASFEO_DMATEL(hess, ii, ii) = 1.0; // Q
 
     // gradient
     for(ii=0; ii<nu; ii++)
         BLASFEO_DVECEL(grad, ii) = BLASFEO_DMATEL(hess, ii, ii) * BLASFEO_DVECEL(u, ui+ii); // r
     for(ii=0; ii<nx; ii++)
         BLASFEO_DVECEL(grad, nu+ii) = BLASFEO_DMATEL(hess, nu+ii, nu+ii) * BLASFEO_DVECEL(x, xi+ii); // q
+
+    // function
+    *fun = 0.0;
+    for(ii=0; ii<nu; ii++)
+        *fun += BLASFEO_DVECEL(grad, ii) * BLASFEO_DVECEL(u, ui+ii); // r
+    for(ii=0; ii<nx; ii++)
+        *fun += BLASFEO_DVECEL(grad, nu+ii) * BLASFEO_DVECEL(x, xi+ii); // q
+
+    *fun *= 0.5;
 
     return;
 
@@ -197,7 +208,7 @@ void ext_cost(void *fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_
 
 
 
-void ext_costN(void *fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_out, void **out)
+void ext_costN(void *ext_fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type_out, void **out)
 {
 
     int ii;
@@ -205,33 +216,46 @@ void ext_costN(void *fun, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *type
     int nu = 0;
     int nx = 8;
 
-	// extract inputs
-	// 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *x_args = in[0];
-	struct blasfeo_dvec *x = x_args->x;
-	int xi = x_args->xi;
-	// 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *u_args = in[1];
-	struct blasfeo_dvec *u = u_args->x;
-	int ui = u_args->xi;
-	// extract outputs
-	// 0: [grad_u; grad_x], size: nu+nx, type: BLASFEO_DVEC
-	struct blasfeo_dvec *grad = out[0];
-	// 0: [hess_uu, hess_ux; hess_xu, hess_xx], size: (nu+nx)*(nu+nx), type: BLASFEO_DMAT
-	struct blasfeo_dmat *hess = out[1];
+    // extract inputs
+    // 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *x_args = in[0];
+    struct blasfeo_dvec *x = x_args->x;
+    int xi = x_args->xi;
+    // 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *u_args = in[1];
+    struct blasfeo_dvec *u = u_args->x;
+    int ui = u_args->xi;
+
+    // extract outputs
+    // 0: fun: COLMAJ
+    double *fun = out[0];
+    // 1: [grad_u; grad_x], size: nu+nx, type: BLASFEO_DVEC
+    struct blasfeo_dvec *grad = out[1];
+    // 2: [hess_uu, hess_ux; hess_xu, hess_xx], size: (nu+nx)*(nu+nx), type: BLASFEO_DMAT
+    struct blasfeo_dmat *hess = out[2];
 
     // Hessian
-	blasfeo_dgese(nu+nx, nu+nx, 0.0, hess, 0, 0);
-	for(ii=0; ii<nu; ii++)
-		BLASFEO_DMATEL(hess, ii, ii) = 2.0; // R
-	for(; ii<nu+nx; ii++)
-		BLASFEO_DMATEL(hess, ii, ii) = 1.0; // Q
+    blasfeo_dgese(nu+nx, nu+nx, 0.0, hess, 0, 0);
+    for(ii=0; ii<nu; ii++)
+        BLASFEO_DMATEL(hess, ii, ii) = 2.0; // R
+    for(; ii<nu+nx; ii++)
+        BLASFEO_DMATEL(hess, ii, ii) = 1.0; // Q
 
     // gradient
     for(ii=0; ii<nu; ii++)
         BLASFEO_DVECEL(grad, ii) = BLASFEO_DMATEL(hess, ii, ii) * BLASFEO_DVECEL(u, ui+ii); // r
     for(ii=0; ii<nx; ii++)
         BLASFEO_DVECEL(grad, nu+ii) = BLASFEO_DMATEL(hess, nu+ii, nu+ii) * BLASFEO_DVECEL(x, xi+ii); // q
+
+    // function
+    *fun = 0.0;
+    for(ii=0; ii<nu; ii++)
+        *fun += BLASFEO_DVECEL(grad, ii) * BLASFEO_DVECEL(u, ui+ii); // r
+    for(ii=0; ii<nx; ii++)
+    {
+        *fun += BLASFEO_DVECEL(grad, nu+ii) * BLASFEO_DVECEL(x, xi+ii); // q
+    }
+    *fun *= 0.5;
 
     return;
 
@@ -261,31 +285,31 @@ void disc_model(void *fun0, ext_fun_arg_t *type_in, void **in, ext_fun_arg_t *ty
     for (ii=0; ii<nx; ii++)
         b[ii] = 0.0;
 
-	// extract inputs
-	// 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
+    // extract inputs
+    // 0: [x], size: nx, type: BLASFEO_DVEC_ARGS
     struct blasfeo_dvec_args *x_args = in[0];
-	struct blasfeo_dvec *x = x_args->x;
-	int xi = x_args->xi;
-	// 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *u_args = in[1];
-	struct blasfeo_dvec *u = u_args->x;
-	int ui = u_args->xi;
+    struct blasfeo_dvec *x = x_args->x;
+    int xi = x_args->xi;
+    // 1: [u], size: nu, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *u_args = in[1];
+    struct blasfeo_dvec *u = u_args->x;
+    int ui = u_args->xi;
 
-	// extract outputs
-	// 0: [fun], size: nx1, type: BLASFEO_DVEC_ARGS
-	struct blasfeo_dvec_args *f_args = out[0];
-	struct blasfeo_dvec *fun = f_args->x;
-	// 1: [jac_u'; jac_x'], size: (nu+nx)*nx1, type: BLASFEO_DMAT_ARGS
-	struct blasfeo_dmat_args *j_args = out[1];
-	struct blasfeo_dmat *jac = j_args->A;
+    // extract outputs
+    // 0: [fun], size: nx1, type: BLASFEO_DVEC_ARGS
+    struct blasfeo_dvec_args *f_args = out[0];
+    struct blasfeo_dvec *fun = f_args->x;
+    // 1: [jac_u'; jac_x'], size: (nu+nx)*nx1, type: BLASFEO_DMAT_ARGS
+    struct blasfeo_dmat_args *j_args = out[1];
+    struct blasfeo_dmat *jac = j_args->A;
 
     // jac
-	blasfeo_pack_tran_dmat(nx, nu, B, nx, jac, 0, 0);
-	blasfeo_pack_tran_dmat(nx, nx, A, nx, jac, nu, 0);
+    blasfeo_pack_tran_dmat(nx, nu, B, nx, jac, 0, 0);
+    blasfeo_pack_tran_dmat(nx, nx, A, nx, jac, nu, 0);
 
-	// fun
-	blasfeo_dgemv_t(nu, nx, 1.0, jac, 0, 0, u, ui, 0.0, fun, 0, fun, 0);
-	blasfeo_dgemv_t(nx, nx, 1.0, jac, nu, 0, x, xi, 1.0, fun, 0, fun, 0);
+    // fun
+    blasfeo_dgemv_t(nu, nx, 1.0, jac, 0, 0, u, ui, 0.0, fun, 0, fun, 0);
+    blasfeo_dgemv_t(nx, nx, 1.0, jac, nu, 0, x, xi, 1.0, fun, 0, fun, 0);
 
     // free memory
     free(A);
@@ -439,8 +463,8 @@ int main() {
         ocp_nlp_constraints_bgh_config_initialize_default(config->constraints[ii]);
     }
 
-	// regularization
-	ocp_nlp_reg_noreg_config_initialize_default(config->regularize);
+    // regularization
+    ocp_nlp_reg_noreg_config_initialize_default(config->regularize);
 
     /************************************************
     * ocp_nlp_dims
@@ -646,25 +670,25 @@ int main() {
 
     for (int i=0; i<N; i++)
     {
-        cost[i]->ext_cost = &ext_cost_generic;
+        cost[i]->ext_cost_fun_jac_hess = &ext_cost_generic;
     }
-    cost[N]->ext_cost = &ext_costN_generic;
+    cost[N]->ext_cost_fun_jac_hess = &ext_costN_generic;
 
-    blasfeo_pack_dvec(ns[0], Zl0, &cost[0]->Z, 0);
-    blasfeo_pack_dvec(ns[0], Zu0, &cost[0]->Z, ns[0]);
-    blasfeo_pack_dvec(ns[0], zl0, &cost[0]->z, 0);
-    blasfeo_pack_dvec(ns[0], zu0, &cost[0]->z, ns[0]);
+    blasfeo_pack_dvec(ns[0], Zl0, 1, &cost[0]->Z, 0);
+    blasfeo_pack_dvec(ns[0], Zu0, 1, &cost[0]->Z, ns[0]);
+    blasfeo_pack_dvec(ns[0], zl0, 1, &cost[0]->z, 0);
+    blasfeo_pack_dvec(ns[0], zu0, 1, &cost[0]->z, ns[0]);
     for (ii=1; ii<N; ii++)
     {
-        blasfeo_pack_dvec(ns[ii], Zl1, &cost[ii]->Z, 0);
-        blasfeo_pack_dvec(ns[ii], Zu1, &cost[ii]->Z, ns[ii]);
-        blasfeo_pack_dvec(ns[ii], zl1, &cost[ii]->z, 0);
-        blasfeo_pack_dvec(ns[ii], zu1, &cost[ii]->z, ns[ii]);
+        blasfeo_pack_dvec(ns[ii], Zl1, 1, &cost[ii]->Z, 0);
+        blasfeo_pack_dvec(ns[ii], Zu1, 1, &cost[ii]->Z, ns[ii]);
+        blasfeo_pack_dvec(ns[ii], zl1, 1, &cost[ii]->z, 0);
+        blasfeo_pack_dvec(ns[ii], zu1, 1, &cost[ii]->z, ns[ii]);
     }
-    blasfeo_pack_dvec(ns[N], ZlN, &cost[N]->Z, 0);
-    blasfeo_pack_dvec(ns[N], ZuN, &cost[N]->Z, ns[N]);
-    blasfeo_pack_dvec(ns[N], zlN, &cost[N]->z, 0);
-    blasfeo_pack_dvec(ns[N], zuN, &cost[N]->z, ns[N]);
+    blasfeo_pack_dvec(ns[N], ZlN, 1, &cost[N]->Z, 0);
+    blasfeo_pack_dvec(ns[N], ZuN, 1, &cost[N]->Z, ns[N]);
+    blasfeo_pack_dvec(ns[N], zlN, 1, &cost[N]->z, 0);
+    blasfeo_pack_dvec(ns[N], zuN, 1, &cost[N]->z, ns[N]);
 
 
     /* dynamics */
@@ -682,11 +706,11 @@ int main() {
 
     // fist stage
 #if CONSTRAINTS==0 // box constraints
-    blasfeo_pack_dvec(nb[0], lb0, &constraints[0]->d, 0);
-    blasfeo_pack_dvec(nb[0], ub0, &constraints[0]->d, nb[0]+ng[0]+nh[0]);
+    blasfeo_pack_dvec(nb[0], lb0, 1, &constraints[0]->d, 0);
+    blasfeo_pack_dvec(nb[0], ub0, 1, &constraints[0]->d, nb[0]+ng[0]+nh[0]);
     constraints[0]->idxb = idxb0;
-    blasfeo_pack_dvec(ns[0], ls0, &constraints[0]->d, 2*nb[0]+2*ng[0]+2*nh[0]);
-    blasfeo_pack_dvec(ns[0], us0, &constraints[0]->d, 2*nb[0]+2*ng[0]+2*nh[0]+ns[0]);
+    blasfeo_pack_dvec(ns[0], ls0, 1, &constraints[0]->d, 2*nb[0]+2*ng[0]+2*nh[0]);
+    blasfeo_pack_dvec(ns[0], us0, 1, &constraints[0]->d, 2*nb[0]+2*ng[0]+2*nh[0]+ns[0]);
     constraints[0]->idxs = idxs0;
 #elif CONSTRAINTS==1 // general constraints
     // TODO
@@ -697,18 +721,18 @@ int main() {
     // other stages
     for (int i = 1; i < N; i++)
     {
-        blasfeo_pack_dvec(nb[i], lb1, &constraints[i]->d, 0);
-        blasfeo_pack_dvec(nb[i], ub1, &constraints[i]->d, nb[i]+ng[i]+nh[i]);
+        blasfeo_pack_dvec(nb[i], lb1, 1, &constraints[i]->d, 0);
+        blasfeo_pack_dvec(nb[i], ub1, 1, &constraints[i]->d, nb[i]+ng[i]+nh[i]);
         constraints[i]->idxb = idxb1;
-        blasfeo_pack_dvec(ns[i], ls1, &constraints[i]->d, 2*nb[i]+2*ng[i]+2*nh[i]);
-        blasfeo_pack_dvec(ns[i], us1, &constraints[i]->d, 2*nb[i]+2*ng[i]+2*nh[i]+ns[i]);
+        blasfeo_pack_dvec(ns[i], ls1, 1, &constraints[i]->d, 2*nb[i]+2*ng[i]+2*nh[i]);
+        blasfeo_pack_dvec(ns[i], us1, 1, &constraints[i]->d, 2*nb[i]+2*ng[i]+2*nh[i]+ns[i]);
         constraints[i]->idxs = idxs1;
     }
-    blasfeo_pack_dvec(nb[N], lbN, &constraints[N]->d, 0);
-    blasfeo_pack_dvec(nb[N], ubN, &constraints[N]->d, nb[N]+ng[N]+nh[N]);
+    blasfeo_pack_dvec(nb[N], lbN, 1, &constraints[N]->d, 0);
+    blasfeo_pack_dvec(nb[N], ubN, 1, &constraints[N]->d, nb[N]+ng[N]+nh[N]);
     constraints[N]->idxb = idxbN;
-    blasfeo_pack_dvec(ns[N], lsN, &constraints[N]->d, 2*nb[N]+2*ng[N]+2*nh[N]);
-    blasfeo_pack_dvec(ns[N], usN, &constraints[N]->d, 2*nb[N]+2*ng[N]+2*nh[N]+ns[N]);
+    blasfeo_pack_dvec(ns[N], lsN, 1, &constraints[N]->d, 2*nb[N]+2*ng[N]+2*nh[N]);
+    blasfeo_pack_dvec(ns[N], usN, 1, &constraints[N]->d, 2*nb[N]+2*ng[N]+2*nh[N]+ns[N]);
     constraints[N]->idxs = idxsN;
 
 
@@ -744,15 +768,15 @@ int main() {
     double tol_ineq = 1e-9;
     double tol_comp = 1e-9;
 
-    ocp_nlp_opts_set(config, nlp_opts, "max_iter", &max_iter);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
-    ocp_nlp_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "max_iter", &max_iter);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_stat", &tol_stat);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_eq", &tol_eq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_ineq", &tol_ineq);
+    ocp_nlp_solver_opts_set(config, nlp_opts, "tol_comp", &tol_comp);
 #if XCOND==1
     // partial condensing
-	int N2 = 5;
-    ocp_nlp_opts_set(config, nlp_opts, "qp_cond_N", &N2);
+    int N2 = 5;
+    ocp_nlp_solver_opts_set(config, nlp_opts, "qp_cond_N", &N2);
 #endif
 
     // update after user-defined options
@@ -811,8 +835,8 @@ int main() {
             {
                 blasfeo_dvecse(nu[i], 0.0, nlp_out->ux+i, 0);
                 blasfeo_dvecse(nx[i], 0.0, nlp_out->ux+i, nu[i]);
-//             blasfeo_pack_dvec(nu[i], uref, nlp_out->ux+i, 0);
-//             blasfeo_pack_dvec(nx[i], xref, nlp_out->ux+i, nu[i]);
+//             blasfeo_pack_dvec(nu[i], uref, 1, nlp_out->ux+i, 0);
+//             blasfeo_pack_dvec(nx[i], xref, 1, nlp_out->ux+i, nu[i]);
             }
 //     }
 
